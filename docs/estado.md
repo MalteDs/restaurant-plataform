@@ -1,9 +1,10 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 1 completada. Ejecución pausada antes de la Tarea 2.
+**Fase:** Tarea 1 completada. Modelo de datos aprobado; ejecución pausada antes de la Tarea 2.
 **Tarea en curso:** ninguna; se requiere aprobación del usuario para iniciar la Tarea 2.
 **Último commit de implementación:** `ee6a1c6` (`chore: spring boot modular monolith skeleton with postgres`).
+**Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
 
 ## Progreso
@@ -31,6 +32,9 @@
 - La prueba de salud verifica el estado agregado y `components.db.status = UP`; su aserción adicional tuvo RED controlada y luego GREEN.
 - `infra/docker-compose.yml` valida con `docker compose config`. Falta su smoke test de arranque porque `postgres-carga-docente` ocupa el puerto 5432; no se modificó ese servicio.
 - Menores diferidos de revisión: detalles de salud con `show-details: always` y comentario explicativo para el override de Testcontainers.
+- Modelo de datos relacional normalizado aprobado por el usuario: 23 tablas, dinero en `bigint`, FKs compuestas para aislar tenant y sede.
+- Decisiones de negocio cerradas: modificadores por unidad, solo devoluciones completas y código de dispositivo nuevo al re-provisionar.
+- El plan se ajustó al modelo aprobado: precios congelados desde la caja, `sale_item_components`, `refunds.shift_id` y `sync_operations.clock_skew`.
 - Siguiente paso concreto: esperar aprobación del usuario antes de iniciar la Tarea 2.
 
 ## Decisiones pendientes
