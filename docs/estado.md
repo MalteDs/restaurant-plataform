@@ -1,8 +1,8 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 1 completada. Modelo de datos aprobado; ejecución pausada antes de la Tarea 2.
-**Tarea en curso:** ninguna; se requiere aprobación del usuario para iniciar la Tarea 2.
+**Fase:** Tarea 2 completada (esquema multi-tenant, dinero y aislamiento).
+**Tarea en curso:** ninguna; Tarea 3 (identidad y autenticación) lista para iniciar.
 **Último commit de implementación:** `ee6a1c6` (`chore: spring boot modular monolith skeleton with postgres`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
@@ -10,7 +10,7 @@
 ## Progreso
 
 - [x] Tarea 1 — Monolito modular, PostgreSQL y salud
-- [ ] Tarea 2 — Esquema multi-tenant, auditoría y dinero
+- [x] Tarea 2 — Esquema multi-tenant, auditoría y dinero
 - [ ] Tarea 3 — Identidad, dispositivos y autenticación
 - [ ] Tarea 4 — Catálogo
 - [ ] Tarea 5 — Ventas, turnos y pedidos en el servidor
@@ -35,7 +35,7 @@
 - Modelo de datos relacional normalizado aprobado por el usuario: 23 tablas, dinero en `bigint`, FKs compuestas para aislar tenant y sede.
 - Decisiones de negocio cerradas: modificadores por unidad, solo devoluciones completas y código de dispositivo nuevo al re-provisionar.
 - El plan se ajustó al modelo aprobado: precios congelados desde la caja, `sale_item_components`, `refunds.shift_id` y `sync_operations.clock_skew`.
-- Siguiente paso concreto: esperar aprobación del usuario antes de iniciar la Tarea 2.
+- Siguiente paso concreto: iniciar la Tarea 3 (identidad, dispositivos y autenticación).
 
 ## Decisiones pendientes
 

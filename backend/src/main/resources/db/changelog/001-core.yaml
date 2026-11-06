@@ -1,0 +1,509 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-core
+      author: caja
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TYPE user_role AS ENUM ('CASHIER', 'MANAGER', 'ADMIN');
+              CREATE TYPE device_status AS ENUM ('ACTIVE', 'REVOKED');
+              CREATE TYPE product_kind AS ENUM ('PRODUCT', 'COMBO');
+              CREATE TYPE sale_type AS ENUM ('COUNTER', 'DELIVERY', 'DINE_IN');
+              CREATE TYPE sale_status AS ENUM ('CHARGED', 'REFUNDED');
+              CREATE TYPE payment_method AS ENUM ('CASH', 'CARD', 'BREB');
+              CREATE TYPE cash_movement_type AS ENUM ('DEPOSIT', 'WITHDRAWAL');
+              CREATE TYPE order_source AS ENUM ('CAJA', 'RAPPI', 'DIDI');
+              CREATE TYPE sync_operation_type AS ENUM (
+                'CREATE_SALE', 'REFUND_SALE', 'OPEN_SHIFT', 'CASH_MOVEMENT', 'CLOSE_SHIFT'
+              );
+
+              CREATE TABLE tenants (
+                id uuid PRIMARY KEY,
+                name varchar(100) NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now()
+              );
+
+              CREATE TABLE locations (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                code varchar(8) NOT NULL,
+                name varchar(100) NOT NULL,
+                catalog_version bigint NOT NULL DEFAULT 1 CHECK (catalog_version >= 1),
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT locations_tenant_code_uk UNIQUE (tenant_id, code),
+                CONSTRAINT locations_id_tenant_uk UNIQUE (id, tenant_id)
+              );
+
+              CREATE TABLE users (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                username varchar(50) NOT NULL,
+                password_hash varchar(100) NOT NULL,
+                role user_role NOT NULL,
+                active boolean NOT NULL DEFAULT true,
+                refresh_token_hash varchar(100),
+                refresh_token_expires_at timestamptz,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT users_tenant_username_uk UNIQUE (tenant_id, username),
+                CONSTRAINT users_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT users_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE devices (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                code varchar(8) NOT NULL,
+                name varchar(100) NOT NULL,
+                token_hash varchar(100) NOT NULL,
+                status device_status NOT NULL,
+                registered_at timestamptz NOT NULL DEFAULT now(),
+                last_seen_at timestamptz,
+                CONSTRAINT devices_location_code_uk UNIQUE (location_id, code),
+                CONSTRAINT devices_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT devices_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE categories (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                name varchar(100) NOT NULL,
+                sort_order int NOT NULL DEFAULT 0,
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT categories_location_name_uk UNIQUE (location_id, name),
+                CONSTRAINT categories_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT categories_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE products (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                category_id uuid,
+                kind product_kind NOT NULL,
+                name varchar(100) NOT NULL CHECK (btrim(name) <> ''),
+                price_pesos bigint NOT NULL CHECK (price_pesos >= 0),
+                cost_pesos bigint CHECK (cost_pesos IS NULL OR cost_pesos >= 0),
+                sort_order int NOT NULL DEFAULT 0,
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT products_location_name_uk UNIQUE (location_id, name),
+                CONSTRAINT products_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT products_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT products_category_fk FOREIGN KEY (category_id, location_id, tenant_id)
+                  REFERENCES categories(id, location_id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE modifier_groups (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                name varchar(100) NOT NULL,
+                min_selection int NOT NULL DEFAULT 0 CHECK (min_selection >= 0),
+                max_selection int NOT NULL DEFAULT 1 CHECK (max_selection >= min_selection),
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT modifier_groups_location_name_uk UNIQUE (location_id, name),
+                CONSTRAINT modifier_groups_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT modifier_groups_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE modifiers (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                modifier_group_id uuid NOT NULL,
+                name varchar(100) NOT NULL,
+                additional_price_pesos bigint NOT NULL DEFAULT 0 CHECK (additional_price_pesos >= 0),
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT modifiers_group_name_uk UNIQUE (modifier_group_id, name),
+                CONSTRAINT modifiers_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT modifiers_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT modifiers_group_fk FOREIGN KEY (modifier_group_id, tenant_id, location_id)
+                  REFERENCES modifier_groups(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE product_modifier_groups (
+                product_id uuid NOT NULL,
+                modifier_group_id uuid NOT NULL,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (product_id, modifier_group_id),
+                CONSTRAINT product_modifier_groups_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT product_modifier_groups_product_fk FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT product_modifier_groups_group_fk FOREIGN KEY (modifier_group_id, tenant_id, location_id)
+                  REFERENCES modifier_groups(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE combo_components (
+                combo_product_id uuid NOT NULL,
+                component_product_id uuid NOT NULL,
+                quantity int NOT NULL CHECK (quantity > 0),
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (combo_product_id, component_product_id),
+                CONSTRAINT combo_components_not_self CHECK (combo_product_id <> component_product_id),
+                CONSTRAINT combo_components_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT combo_components_combo_fk FOREIGN KEY (combo_product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT combo_components_component_fk FOREIGN KEY (component_product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE shifts (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                device_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                opening_cash_pesos bigint NOT NULL CHECK (opening_cash_pesos >= 0),
+                opened_at timestamptz NOT NULL DEFAULT now(),
+                closed_at timestamptz,
+                counted_cash_pesos bigint CHECK (counted_cash_pesos IS NULL OR counted_cash_pesos >= 0),
+                expected_local_pesos bigint,
+                expected_server_pesos bigint,
+                difference_pesos bigint,
+                operational_date date NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT shifts_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT shifts_id_tenant_location_device_uk UNIQUE (id, tenant_id, location_id, device_id),
+                CONSTRAINT shifts_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT shifts_device_fk FOREIGN KEY (device_id, tenant_id, location_id)
+                  REFERENCES devices(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT shifts_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE UNIQUE INDEX shifts_one_open_per_device
+                ON shifts (location_id, device_id) WHERE closed_at IS NULL;
+              CREATE INDEX shifts_operational_date_idx
+                ON shifts (tenant_id, location_id, operational_date);
+
+              CREATE TABLE sales (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                device_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                shift_id uuid NOT NULL,
+                type sale_type NOT NULL,
+                table_label varchar(20),
+                delivery_fee_pesos bigint NOT NULL DEFAULT 0 CHECK (delivery_fee_pesos >= 0),
+                total_pesos bigint NOT NULL CHECK (total_pesos >= 0),
+                status sale_status NOT NULL DEFAULT 'CHARGED',
+                display_code varchar(20) NOT NULL,
+                device_seq bigint NOT NULL CHECK (device_seq > 0),
+                operational_date date NOT NULL,
+                client_created_at timestamptz NOT NULL,
+                server_received_at timestamptz,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT sales_tenant_display_code_uk UNIQUE (tenant_id, display_code),
+                CONSTRAINT sales_device_seq_uk UNIQUE (device_id, device_seq),
+                CONSTRAINT sales_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT sales_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sales_device_fk FOREIGN KEY (device_id, tenant_id, location_id)
+                  REFERENCES devices(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sales_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sales_shift_fk FOREIGN KEY (shift_id, tenant_id, location_id, device_id)
+                  REFERENCES shifts(id, tenant_id, location_id, device_id) ON DELETE RESTRICT,
+                CONSTRAINT sales_table_label_chk CHECK (
+                  (type = 'DINE_IN' AND table_label IS NOT NULL)
+                  OR (type <> 'DINE_IN' AND table_label IS NULL)
+                ),
+                CONSTRAINT sales_delivery_fee_chk CHECK (type = 'DELIVERY' OR delivery_fee_pesos = 0)
+              );
+
+              CREATE INDEX products_location_category_active_idx
+                ON products (location_id, category_id, active);
+              CREATE INDEX sales_report_idx ON sales (tenant_id, location_id, operational_date);
+              CREATE INDEX sales_shift_idx ON sales (shift_id);
+              CREATE INDEX sales_display_code_idx ON sales (display_code);
+
+              CREATE TABLE sale_items (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                sale_id uuid NOT NULL,
+                product_id uuid NOT NULL,
+                product_name varchar(100) NOT NULL,
+                category_name varchar(100) NOT NULL,
+                quantity int NOT NULL CHECK (quantity BETWEEN 1 AND 99),
+                unit_price_pesos bigint NOT NULL CHECK (unit_price_pesos >= 0),
+                cost_pesos bigint CHECK (cost_pesos IS NULL OR cost_pesos >= 0),
+                note varchar(200),
+                line_total_pesos bigint NOT NULL CHECK (line_total_pesos >= 0),
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT sale_items_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT sale_items_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_items_sale_fk FOREIGN KEY (sale_id, tenant_id, location_id)
+                  REFERENCES sales(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_items_product_fk FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX sale_items_sale_idx ON sale_items (sale_id);
+              CREATE INDEX sale_items_product_idx ON sale_items (product_id);
+
+              CREATE TABLE sale_item_modifiers (
+                sale_item_id uuid NOT NULL,
+                modifier_id uuid NOT NULL,
+                modifier_name varchar(100) NOT NULL,
+                additional_price_pesos bigint NOT NULL CHECK (additional_price_pesos >= 0),
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (sale_item_id, modifier_id),
+                CONSTRAINT sale_item_modifiers_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_modifiers_item_fk FOREIGN KEY (sale_item_id, tenant_id, location_id)
+                  REFERENCES sale_items(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_modifiers_modifier_fk FOREIGN KEY (modifier_id, tenant_id, location_id)
+                  REFERENCES modifiers(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE sale_item_components (
+                sale_item_id uuid NOT NULL,
+                component_product_id uuid NOT NULL,
+                component_name varchar(100) NOT NULL,
+                quantity int NOT NULL CHECK (quantity > 0),
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (sale_item_id, component_product_id),
+                CONSTRAINT sale_item_components_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_components_item_fk FOREIGN KEY (sale_item_id, tenant_id, location_id)
+                  REFERENCES sale_items(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_components_product_fk FOREIGN KEY (component_product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX sale_item_components_product_idx ON sale_item_components (component_product_id);
+
+              CREATE TABLE payments (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                sale_id uuid NOT NULL,
+                method payment_method NOT NULL,
+                amount_pesos bigint NOT NULL CHECK (amount_pesos >= 0),
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT payments_sale_uk UNIQUE (sale_id),
+                CONSTRAINT payments_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT payments_sale_fk FOREIGN KEY (sale_id, tenant_id, location_id)
+                  REFERENCES sales(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE cash_movements (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                shift_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                type cash_movement_type NOT NULL,
+                amount_pesos bigint NOT NULL CHECK (amount_pesos > 0),
+                reason varchar(200) NOT NULL,
+                operational_date date NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT cash_movements_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT cash_movements_shift_fk FOREIGN KEY (shift_id, tenant_id, location_id)
+                  REFERENCES shifts(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT cash_movements_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX cash_movements_shift_idx ON cash_movements (shift_id);
+
+              CREATE TABLE refunds (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                sale_id uuid NOT NULL,
+                shift_id uuid NOT NULL,
+                device_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                reason varchar(200) NOT NULL,
+                amount_pesos bigint NOT NULL CHECK (amount_pesos > 0),
+                method payment_method NOT NULL,
+                operational_date date NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT refunds_sale_uk UNIQUE (sale_id),
+                CONSTRAINT refunds_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT refunds_sale_fk FOREIGN KEY (sale_id, tenant_id, location_id)
+                  REFERENCES sales(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT refunds_shift_fk FOREIGN KEY (shift_id, tenant_id, location_id, device_id)
+                  REFERENCES shifts(id, tenant_id, location_id, device_id) ON DELETE RESTRICT,
+                CONSTRAINT refunds_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX refunds_shift_idx ON refunds (shift_id);
+              CREATE INDEX refunds_report_idx ON refunds (tenant_id, location_id, operational_date);
+
+              CREATE TABLE expenses (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                category varchar(100) NOT NULL,
+                description varchar(200) NOT NULL,
+                amount_pesos bigint NOT NULL CHECK (amount_pesos > 0),
+                expense_date date NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT expenses_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT expenses_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX expenses_report_idx ON expenses (tenant_id, location_id, expense_date);
+
+              CREATE TABLE orders (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                sale_id uuid NOT NULL,
+                source order_source NOT NULL,
+                external_ref varchar(100),
+                status sale_status NOT NULL DEFAULT 'CHARGED',
+                operational_date date NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT orders_sale_uk UNIQUE (sale_id),
+                CONSTRAINT orders_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT orders_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT orders_sale_fk FOREIGN KEY (sale_id, tenant_id, location_id)
+                  REFERENCES sales(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX orders_report_idx ON orders (tenant_id, location_id, operational_date);
+
+              CREATE TABLE order_items (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                order_id uuid NOT NULL,
+                product_id uuid,
+                product_name varchar(100) NOT NULL,
+                quantity int NOT NULL CHECK (quantity BETWEEN 1 AND 99),
+                unit_price_pesos bigint NOT NULL CHECK (unit_price_pesos >= 0),
+                note varchar(200),
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT order_items_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT order_items_order_fk FOREIGN KEY (order_id, tenant_id, location_id)
+                  REFERENCES orders(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT order_items_product_fk FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX order_items_order_idx ON order_items (order_id);
+
+              CREATE TABLE sync_operations (
+                operation_id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                device_id uuid NOT NULL,
+                user_id uuid NOT NULL,
+                seq bigint NOT NULL CHECK (seq > 0),
+                type sync_operation_type NOT NULL,
+                entity_id uuid,
+                payload_hash varchar(64) NOT NULL,
+                result_json jsonb,
+                client_created_at timestamptz NOT NULL,
+                server_received_at timestamptz NOT NULL DEFAULT now(),
+                applied_at timestamptz,
+                clock_skew boolean NOT NULL DEFAULT false,
+                CONSTRAINT sync_operations_device_seq_uk UNIQUE (device_id, seq),
+                CONSTRAINT sync_operations_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sync_operations_device_fk FOREIGN KEY (device_id, tenant_id, location_id)
+                  REFERENCES devices(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sync_operations_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX sync_operations_applied_idx
+                ON sync_operations (tenant_id, location_id, applied_at);
+
+              CREATE TABLE audit_events (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                user_id uuid,
+                event_type varchar(50) NOT NULL,
+                entity_type varchar(50) NOT NULL,
+                entity_id uuid,
+                payload_json jsonb,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT audit_events_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT audit_events_user_fk FOREIGN KEY (user_id, tenant_id, location_id)
+                  REFERENCES users(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+
+              CREATE INDEX audit_events_report_idx ON audit_events (tenant_id, location_id, created_at);
+              CREATE INDEX audit_events_entity_idx ON audit_events (entity_type, entity_id);
+
+              CREATE OR REPLACE FUNCTION reject_audit_mutation() RETURNS trigger
+              LANGUAGE plpgsql AS $function$
+              BEGIN
+                RAISE EXCEPTION 'audit_events is append-only';
+              END;
+              $function$;
+
+              CREATE TRIGGER audit_events_no_update_delete
+                BEFORE UPDATE OR DELETE ON audit_events
+                FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation();
+
+              CREATE TRIGGER audit_events_no_truncate
+                BEFORE TRUNCATE ON audit_events
+                FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_mutation();
+
+              CREATE OR REPLACE FUNCTION enforce_full_refund() RETURNS trigger
+              LANGUAGE plpgsql AS $function$
+              DECLARE
+                sale_total bigint;
+              BEGIN
+                SELECT total_pesos INTO sale_total
+                FROM sales
+                WHERE id = NEW.sale_id
+                  AND tenant_id = NEW.tenant_id
+                  AND location_id = NEW.location_id;
+
+                IF sale_total IS NULL OR NEW.amount_pesos <> sale_total THEN
+                  RAISE EXCEPTION 'refund must equal the sale total';
+                END IF;
+
+                RETURN NEW;
+              END;
+              $function$;
+
+              CREATE TRIGGER refunds_full_amount
+                BEFORE INSERT OR UPDATE ON refunds
+                FOR EACH ROW EXECUTE FUNCTION enforce_full_refund();
