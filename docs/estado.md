@@ -12,8 +12,8 @@
 - [x] Tarea 1 — Monolito modular, PostgreSQL y salud
 - [x] Tarea 2 — Esquema multi-tenant, auditoría y dinero
 - [x] Tarea 3 — Identidad, dispositivos y autenticación
-- [ ] Tarea 4 — Catálogo
-- [ ] Tarea 5 — Ventas, turnos y pedidos en el servidor
+- [x] Tarea 4 — Catálogo
+- [x] Tarea 5 — Ventas, turnos y pedidos en el servidor
 - [ ] Tarea 6 — Sync API idempotente
 - [ ] Tarea 7 — Reportes centrales, gastos y auditoría
 - [ ] Tarea 8 — Shell PWA, service worker y navegación
@@ -37,7 +37,9 @@
 - El plan se ajustó al modelo aprobado: precios congelados desde la caja, `sale_item_components`, `refunds.shift_id` y `sync_operations.clock_skew`.
 - Tarea 3: login/refresh con JWT (15 min) y refresh opaco rotado (30 días), BCrypt, registro y revocacion de dispositivos, filtros `JwtAuthFilter` y `DeviceTokenFilter`.
 - Tarea 3: `JWT_SECRET` es obligatorio fuera del perfil `local`; el compose y la documentacion de despliegue deben definirlo.
-- Siguiente paso concreto: iniciar la Tarea 4 (catalogo y seed del menu de Karbon).
+- Tarea 4: catalogo con version, seed del menu de Karbon (9 categorias, 75 productos) y endpoints admin con validacion.
+- Tarea 5: venta con precios congelados de la caja, pago unico, pedido 1:1, turno abierto por dispositivo y devolucion completa.
+- Siguiente paso concreto: iniciar la Tarea 6 (sync idempotente y ordenado).
 
 ## Decisiones pendientes
 
