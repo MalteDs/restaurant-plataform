@@ -1,6 +1,6 @@
 package com.caja.shared;
 
-import com.caja.catalog.CatalogQuery;
+import com.caja.catalog.CatalogService;
 import com.caja.shared.tenant.TenantId;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ class TenantIsolationIT {
   static PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16");
 
   @Autowired JdbcTemplate jdbc;
-  @Autowired CatalogQuery catalog;
+  @Autowired CatalogService catalog;
 
   @Test void cannotReadAnotherTenantOrLocation() {
     var otherTenant = insertTenant("otro");
