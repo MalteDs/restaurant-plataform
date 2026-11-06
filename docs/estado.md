@@ -1,14 +1,14 @@
 # Estado de implementación — Caja v1
 
-**Última actualización:** 2026-11-05
-**Fase:** planificación cerrada. Implementación **no iniciada**.
-**Tarea en curso:** ninguna.
-**Último commit:** ninguno (el repositorio lo inicializa el usuario).
+**Última actualización:** 2026-11-06
+**Fase:** Tarea 1 completada. Ejecución pausada antes de la Tarea 2.
+**Tarea en curso:** ninguna; se requiere aprobación del usuario para iniciar la Tarea 2.
+**Último commit de implementación:** `ee6a1c6` (`chore: spring boot modular monolith skeleton with postgres`).
 **Bloqueos:** ninguno.
 
 ## Progreso
 
-- [ ] Tarea 1 — Monolito modular, PostgreSQL y salud
+- [x] Tarea 1 — Monolito modular, PostgreSQL y salud
 - [ ] Tarea 2 — Esquema multi-tenant, auditoría y dinero
 - [ ] Tarea 3 — Identidad, dispositivos y autenticación
 - [ ] Tarea 4 — Catálogo
@@ -26,12 +26,12 @@
 
 ## Notas de la sesión
 
-Completar solo si una sesión termina a mitad de una tarea:
-
-- **Tarea en curso:**
-- **Prueba que falla:**
-- **Último comando ejecutado:**
-- **Siguiente paso concreto:**
+- Tarea 1 revisada y aprobada por `opencode-go/deepseek-v4.1-flash`, modelo liviano elegido explícitamente por el usuario.
+- `./mvnw test -Dtest=HealthIT` y `./mvnw verify`: 1 prueba, 0 fallos, 0 errores y sin advertencias.
+- La prueba de salud verifica el estado agregado y `components.db.status = UP`; su aserción adicional tuvo RED controlada y luego GREEN.
+- `infra/docker-compose.yml` valida con `docker compose config`. Falta su smoke test de arranque porque `postgres-carga-docente` ocupa el puerto 5432; no se modificó ese servicio.
+- Menores diferidos de revisión: detalles de salud con `show-details: always` y comentario explicativo para el override de Testcontainers.
+- Siguiente paso concreto: esperar aprobación del usuario antes de iniciar la Tarea 2.
 
 ## Decisiones pendientes
 
