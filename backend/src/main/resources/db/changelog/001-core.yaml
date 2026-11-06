@@ -69,6 +69,11 @@ databaseChangeLog:
                   REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
               );
 
+              CREATE INDEX users_refresh_token_hash_idx
+                ON users (refresh_token_hash) WHERE refresh_token_hash IS NOT NULL;
+              CREATE INDEX devices_token_hash_idx
+                ON devices (token_hash) WHERE status = 'ACTIVE';
+
               CREATE TABLE categories (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,

@@ -11,7 +11,7 @@
 
 - [x] Tarea 1 — Monolito modular, PostgreSQL y salud
 - [x] Tarea 2 — Esquema multi-tenant, auditoría y dinero
-- [ ] Tarea 3 — Identidad, dispositivos y autenticación
+- [x] Tarea 3 — Identidad, dispositivos y autenticación
 - [ ] Tarea 4 — Catálogo
 - [ ] Tarea 5 — Ventas, turnos y pedidos en el servidor
 - [ ] Tarea 6 — Sync API idempotente
@@ -35,7 +35,9 @@
 - Modelo de datos relacional normalizado aprobado por el usuario: 23 tablas, dinero en `bigint`, FKs compuestas para aislar tenant y sede.
 - Decisiones de negocio cerradas: modificadores por unidad, solo devoluciones completas y código de dispositivo nuevo al re-provisionar.
 - El plan se ajustó al modelo aprobado: precios congelados desde la caja, `sale_item_components`, `refunds.shift_id` y `sync_operations.clock_skew`.
-- Siguiente paso concreto: iniciar la Tarea 3 (identidad, dispositivos y autenticación).
+- Tarea 3: login/refresh con JWT (15 min) y refresh opaco rotado (30 días), BCrypt, registro y revocacion de dispositivos, filtros `JwtAuthFilter` y `DeviceTokenFilter`.
+- Tarea 3: `JWT_SECRET` es obligatorio fuera del perfil `local`; el compose y la documentacion de despliegue deben definirlo.
+- Siguiente paso concreto: iniciar la Tarea 4 (catalogo y seed del menu de Karbon).
 
 ## Decisiones pendientes
 
