@@ -14,7 +14,7 @@
 - [x] Tarea 3 — Identidad, dispositivos y autenticación
 - [x] Tarea 4 — Catálogo
 - [x] Tarea 5 — Ventas, turnos y pedidos en el servidor
-- [ ] Tarea 6 — Sync API idempotente
+- [x] Tarea 6 — Sync API idempotente
 - [ ] Tarea 7 — Reportes centrales, gastos y auditoría
 - [ ] Tarea 8 — Shell PWA, service worker y navegación
 - [ ] Tarea 9 — Base local, catálogo y sesión offline
@@ -39,7 +39,8 @@
 - Tarea 3: `JWT_SECRET` es obligatorio fuera del perfil `local`; el compose y la documentacion de despliegue deben definirlo.
 - Tarea 4: catalogo con version, seed del menu de Karbon (9 categorias, 75 productos) y endpoints admin con validacion.
 - Tarea 5: venta con precios congelados de la caja, pago unico, pedido 1:1, turno abierto por dispositivo y devolucion completa.
-- Siguiente paso concreto: iniciar la Tarea 6 (sync idempotente y ordenado).
+- Tarea 6: `POST /api/sync/operations` con `APPLIED|DUPLICATE|RETRY|REJECTED`, orden por `seq` y `payload_hash` para detectar cambios.
+- Siguiente paso concreto: iniciar la Tarea 7 (reportes centrales, gastos y auditoria).
 
 ## Decisiones pendientes
 
