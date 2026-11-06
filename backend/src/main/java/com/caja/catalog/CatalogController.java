@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -54,7 +55,7 @@ public class CatalogController {
                                             @Valid @RequestBody ProductUpdate request,
                                             @AuthenticationPrincipal AuthenticatedUser user) {
     catalog.updateProduct(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
-        request.pricePesos(), request.costPesos(), request.active());
+        request.categoryId(), request.pricePesos(), request.costPesos(), request.active());
     return ResponseEntity.noContent().build();
   }
 
@@ -66,6 +67,26 @@ public class CatalogController {
     var id = catalog.createCategory(new TenantId(user.tenantId()), user.locationId(),
         request.name(), request.sortOrder() == null ? 0 : request.sortOrder());
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
+  }
+
+  @PutMapping("/categories/{id}")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Void> updateCategory(@PathVariable UUID id,
+                                              @Valid @RequestBody CategoryUpdate request,
+                                              @AuthenticationPrincipal AuthenticatedUser user) {
+    catalog.updateCategory(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
+        request.sortOrder(), request.active());
+    return ResponseEntity.noContent().build();
+  }
+
+  @PutMapping("/modifier-groups/{id}")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Void> updateModifierGroup(@PathVariable UUID id,
+                                                   @Valid @RequestBody ModifierGroupUpdate request,
+                                                   @AuthenticationPrincipal AuthenticatedUser user) {
+    catalog.updateModifierGroup(new TenantId(user.tenantId()), user.locationId(), id,
+        request.name(), request.active());
+    return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/modifier-groups")
@@ -85,13 +106,14 @@ public class CatalogController {
   }
 
   public record ProductRequest(@NotBlank @Size(max = 100) String name,
-                               String categoryId,
+                               UUID categoryId,
                                @NotNull @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
-                               String kind) {
+                               @Pattern(regexp = "PRODUCT|COMBO") String kind) {
   }
 
   public record ProductUpdate(@Size(max = 100) String name,
+                               UUID categoryId,
                                @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
                                Boolean active) {
@@ -103,7 +125,13 @@ public class CatalogController {
   public record ModifierGroupRequest(@NotBlank @Size(max = 100) String name,
                                      @Min(0) Integer minSelection,
                                      @Min(1) Integer maxSelection,
-                                     List<@Valid ModifierRequest> modifiers) {
+                                     List<@NotNull @Valid ModifierRequest> modifiers) {
+  }
+
+  public record CategoryUpdate(@Size(max = 100) String name, Integer sortOrder, Boolean active) {
+  }
+
+  public record ModifierGroupUpdate(@Size(max = 100) String name, Boolean active) {
   }
 
   public record ModifierRequest(@NotBlank @Size(max = 100) String name,

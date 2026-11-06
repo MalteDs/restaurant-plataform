@@ -16,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -30,6 +32,7 @@ public class CatalogService {
     return snapshot(tenantId, locationId).products();
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CatalogSnapshot snapshot(TenantId tenantId, UUID locationId) {
     var version = jdbc.query("""
         select catalog_version from locations where id = ? and tenant_id = ?
@@ -39,7 +42,7 @@ public class CatalogService {
     var categories = jdbc.query("""
         select id, name, sort_order, active
         from categories
-        where tenant_id = ? and location_id = ?
+        where tenant_id = ? and location_id = ? and active
         order by sort_order, name
         """, (rs, rowNum) -> new CategoryView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("sort_order"),
@@ -52,7 +55,7 @@ public class CatalogService {
         from products p
         left join categories c
           on c.id = p.category_id and c.tenant_id = p.tenant_id and c.location_id = p.location_id
-        where p.tenant_id = ? and p.location_id = ?
+        where p.tenant_id = ? and p.location_id = ? and p.active
         order by p.sort_order, p.name
         """, (rs, rowNum) -> new ProductView(
         rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
@@ -65,7 +68,7 @@ public class CatalogService {
     var groups = jdbc.query("""
         select id, name, min_selection, max_selection
         from modifier_groups
-        where tenant_id = ? and location_id = ?
+        where tenant_id = ? and location_id = ? and active
         order by name
         """, (rs, rowNum) -> new ModifierGroupView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("min_selection"),
@@ -120,7 +123,8 @@ public class CatalogService {
     return new CatalogSnapshot(version, categories, products, groups);
   }
 
-  public UUID createProduct(TenantId tenantId, UUID locationId, String name, String categoryId,
+  @Transactional
+  public UUID createProduct(TenantId tenantId, UUID locationId, String name, UUID categoryId,
                             long pricePesos, Long costPesos, String kind) {
     var id = UUID.randomUUID();
     try {
@@ -136,20 +140,27 @@ public class CatalogService {
     return id;
   }
 
+  @Transactional
   public void updateProduct(TenantId tenantId, UUID locationId, UUID productId, String name,
-                            Long pricePesos, Long costPesos, Boolean active) {
+                            UUID categoryId, Long pricePesos, Long costPesos, Boolean active) {
+    if (name != null && name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
+    }
     var updated = jdbc.update("""
         update products
-        set name = coalesce(?, name), price_pesos = coalesce(?, price_pesos),
-            cost_pesos = ?, active = coalesce(?, active), updated_at = now()
+        set name = coalesce(?, name), category_id = coalesce(?, category_id),
+            price_pesos = coalesce(?, price_pesos), cost_pesos = coalesce(?, cost_pesos),
+            active = coalesce(?, active), updated_at = now()
         where id = ? and tenant_id = ? and location_id = ?
-        """, name, pricePesos, costPesos, active, productId, tenantId.value(), locationId);
+        """, name, categoryId, pricePesos, costPesos, active, productId, tenantId.value(),
+        locationId);
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
     bumpVersion(tenantId, locationId);
   }
 
+  @Transactional
   public UUID createCategory(TenantId tenantId, UUID locationId, String name, int sortOrder) {
     var id = UUID.randomUUID();
     try {
@@ -164,26 +175,64 @@ public class CatalogService {
     return id;
   }
 
+  @Transactional
   public UUID createModifierGroup(TenantId tenantId, UUID locationId, String name, int minSelection,
                                   int maxSelection, List<ModifierInput> modifiers) {
     if (maxSelection < minSelection) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maximo menor que minimo");
     }
     var id = UUID.randomUUID();
-    jdbc.update("""
-        insert into modifier_groups(id, tenant_id, location_id, name, min_selection, max_selection)
-        values (?, ?, ?, ?, ?, ?)
-        """, id, tenantId.value(), locationId, name, minSelection, maxSelection);
-    for (var modifier : modifiers) {
+    try {
       jdbc.update("""
-          insert into modifiers(id, tenant_id, location_id, modifier_group_id, name,
-                                 additional_price_pesos)
+          insert into modifier_groups(id, tenant_id, location_id, name, min_selection, max_selection)
           values (?, ?, ?, ?, ?, ?)
-          """, UUID.randomUUID(), tenantId.value(), locationId, id, modifier.name(),
-          modifier.additionalPricePesos());
+          """, id, tenantId.value(), locationId, name, minSelection, maxSelection);
+      for (var modifier : modifiers) {
+        jdbc.update("""
+            insert into modifiers(id, tenant_id, location_id, modifier_group_id, name,
+                                   additional_price_pesos)
+            values (?, ?, ?, ?, ?, ?)
+            """, UUID.randomUUID(), tenantId.value(), locationId, id, modifier.name(),
+            modifier.additionalPricePesos());
+      }
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "El grupo o modificador ya existe");
     }
     bumpVersion(tenantId, locationId);
     return id;
+  }
+
+  public void updateCategory(TenantId tenantId, UUID locationId, UUID categoryId, String name,
+                             Integer sortOrder, Boolean active) {
+    if (name != null && name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
+    }
+    var updated = jdbc.update("""
+        update categories
+        set name = coalesce(?, name), sort_order = coalesce(?, sort_order),
+            active = coalesce(?, active), updated_at = now()
+        where id = ? and tenant_id = ? and location_id = ?
+        """, name, sortOrder, active, categoryId, tenantId.value(), locationId);
+    if (updated == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Categoria no encontrada");
+    }
+    bumpVersion(tenantId, locationId);
+  }
+
+  public void updateModifierGroup(TenantId tenantId, UUID locationId, UUID groupId, String name,
+                                  Boolean active) {
+    if (name != null && name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
+    }
+    var updated = jdbc.update("""
+        update modifier_groups
+        set name = coalesce(?, name), active = coalesce(?, active), updated_at = now()
+        where id = ? and tenant_id = ? and location_id = ?
+        """, name, active, groupId, tenantId.value(), locationId);
+    if (updated == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Grupo de modificadores no encontrado");
+    }
+    bumpVersion(tenantId, locationId);
   }
 
   private void bumpVersion(TenantId tenantId, UUID locationId) {
