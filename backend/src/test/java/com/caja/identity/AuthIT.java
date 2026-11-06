@@ -107,8 +107,10 @@ class AuthIT {
     var deviceToken = (String) registration.get("deviceToken");
     var deviceId = (String) registration.get("deviceId");
 
-    mvc.perform(post("/api/sync/operations").header("X-Device-Token", deviceToken))
-        .andExpect(status().isNotFound());
+    mvc.perform(post("/api/sync/operations").header("X-Device-Token", deviceToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("operations", java.util.List.of()))))
+        .andExpect(status().isOk());
 
     mvc.perform(post("/api/devices/" + deviceId + "/revoke")
             .header("Authorization", "Bearer " + login("admin_revoke").get("accessToken")))
