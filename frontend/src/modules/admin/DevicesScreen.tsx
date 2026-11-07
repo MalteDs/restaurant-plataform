@@ -37,6 +37,8 @@ export default function DevicesScreen() {
         body: JSON.stringify({ code, name })
       })
       setToken(created.deviceToken)
+      // The device that registers itself keeps the token for sync on this browser.
+      localStorage.setItem('caja.deviceToken', created.deviceToken)
       setCode('')
       setName('')
       await refresh()

@@ -88,12 +88,35 @@ public class SyncService {
     var clockSkew = Math.abs(Duration.between(operation.clientCreatedAt(), Instant.now())
         .toMinutes()) > CLOCK_SKEW_LIMIT.toMinutes();
     try {
+      validate(operation, batch);
       var outcome = dispatch(operation, batch);
       record(operation, batch, hash, outcome.entityId(), outcome.result(), clockSkew, null);
       return new SyncResult(operation.operationId(), SyncStatus.APPLIED, outcome.result(), null);
     } catch (IllegalStateException e) {
       record(operation, batch, hash, null, Map.of("error", e.getMessage()), clockSkew, e.getMessage());
       return new SyncResult(operation.operationId(), SyncStatus.REJECTED, Map.of(), e.getMessage());
+    }
+  }
+
+  private void validate(SyncOperation operation, SyncBatch batch) {
+    if (!"CREATE_SALE".equals(operation.type()) && !"REFUND_SALE".equals(operation.type())) {
+      return;
+    }
+    var payload = operation.payload();
+    var open = jdbc.queryForObject("""
+        select count(*) from shifts
+        where id = ? and tenant_id = ? and location_id = ? and device_id = ? and closed_at is null
+        """, Integer.class, uuid(payload.get("shiftId")), batch.tenantId(), batch.locationId(),
+        batch.deviceId());
+    if (open == null || open == 0) {
+      throw new IllegalStateException("No hay turno abierto para este dispositivo");
+    }
+    if ("REFUND_SALE".equals(operation.type())) {
+      var refunded = jdbc.queryForObject("select count(*) from refunds where sale_id = ?",
+          Integer.class, uuid(payload.get("saleId")));
+      if (refunded != null && refunded > 0) {
+        throw new IllegalStateException("La venta ya fue devuelta");
+      }
     }
   }
 
@@ -118,8 +141,8 @@ public class SyncService {
             "amountPesos", refund.amountPesos()));
       }
       case "OPEN_SHIFT" -> {
-        var shiftId = shifts.open(new OpenShiftCommand(batch.tenantId(), batch.locationId(),
-            batch.deviceId(), operation.userId(),
+        var shiftId = shifts.open(new OpenShiftCommand(uuid(payload.get("shiftId")),
+            batch.tenantId(), batch.locationId(), batch.deviceId(), operation.userId(),
             ((Number) payload.get("openingCashPesos")).longValue(),
             LocalDate.now(OPERATING_ZONE)));
         yield new Outcome(shiftId, Map.of("shiftId", shiftId.toString()));
@@ -168,8 +191,8 @@ public class SyncService {
           item.get("costPesos") == null ? null : ((Number) item.get("costPesos")).longValue(),
           (String) item.get("note"), modifiers, components));
     }
-    return new CreateSaleCommand(batch.tenantId(), batch.locationId(), batch.deviceId(),
-        operation.userId(), uuid(payload.get("shiftId")),
+    return new CreateSaleCommand(operation.entityId(), batch.tenantId(), batch.locationId(),
+        batch.deviceId(), operation.userId(), uuid(payload.get("shiftId")),
         SaleType.valueOf((String) payload.get("type")), (String) payload.get("tableLabel"),
         ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue(), items,
         PaymentMethod.valueOf((String) payload.get("method")), operation.operationId(),

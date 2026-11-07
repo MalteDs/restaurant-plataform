@@ -50,7 +50,7 @@ export async function openShift(
       clientCreatedAt: now.toISOString(),
       status: 'LOCAL_PENDING',
       attempts: 0,
-      payload: { openingCashPesos }
+      payload: { openingCashPesos, shiftId }
     })
   })
 

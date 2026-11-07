@@ -30,14 +30,19 @@ public class ShiftApplicationService {
     if (alreadyOpen != null && alreadyOpen > 0) {
       throw new IllegalStateException("El dispositivo ya tiene un turno abierto");
     }
-    var shiftId = UUID.randomUUID();
+    var existing = jdbc.query("select id from shifts where id = ? and tenant_id = ?",
+        (rs, rowNum) -> rs.getObject("id", UUID.class), command.shiftId(), command.tenantId())
+        .stream().findFirst();
+    if (existing.isPresent()) {
+      return existing.get();
+    }
     jdbc.update("""
         insert into shifts(id, tenant_id, location_id, device_id, user_id, opening_cash_pesos,
                            operational_date)
         values (?, ?, ?, ?, ?, ?, ?)
-        """, shiftId, command.tenantId(), command.locationId(), command.deviceId(),
+        """, command.shiftId(), command.tenantId(), command.locationId(), command.deviceId(),
         command.userId(), command.openingCashPesos(), command.operationalDate());
-    return shiftId;
+    return command.shiftId();
   }
 
   /** Cash the drawer should hold: opening + cash sales - cash refunds + deposits - withdrawals. */

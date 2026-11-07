@@ -118,7 +118,8 @@ class SyncIT {
   private SyncOperation saleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
                                       Instant clientCreatedAt) {
     var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
-    return new SyncOperation(id, seq, "CREATE_SALE", null, ctx.userId(), clientCreatedAt,
+    var saleId = UUID.randomUUID();
+    return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
         Map.of(
             "type", "COUNTER",
             "shiftId", ctx.shiftId().toString(),

@@ -27,10 +27,13 @@ public class SaleApplicationService {
 
   @Transactional
   public AppliedSale apply(CreateSaleCommand command) {
+    var existing = querySale(command.saleId());
+    if (existing != null) {
+      return existing;
+    }
     requireOpenShift(command);
     var total = totalOf(command);
-
-    var saleId = UUID.randomUUID();
+    var saleId = command.saleId();
     jdbc.update("""
         insert into sales(id, tenant_id, location_id, device_id, user_id, shift_id, type,
                           table_label, delivery_fee_pesos, total_pesos, display_code, device_seq,
@@ -51,6 +54,14 @@ public class SaleApplicationService {
   }
 
   public AppliedSale find(UUID saleId) {
+    var found = querySale(saleId);
+    if (found == null) {
+      throw new IllegalStateException("Venta no encontrada");
+    }
+    return found;
+  }
+
+  private AppliedSale querySale(UUID saleId) {
     return jdbc.query("""
         select id, shift_id, type, display_code, total_pesos, delivery_fee_pesos
         from sales
@@ -59,7 +70,7 @@ public class SaleApplicationService {
         rs.getObject("id", UUID.class), rs.getObject("shift_id", UUID.class),
         SaleType.valueOf(rs.getString("type")), rs.getString("display_code"),
         rs.getLong("total_pesos"), rs.getLong("delivery_fee_pesos")), saleId)
-        .stream().findFirst().orElseThrow(() -> new IllegalStateException("Venta no encontrada"));
+        .stream().findFirst().orElse(null);
   }
 
   private void requireOpenShift(CreateSaleCommand command) {

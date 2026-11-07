@@ -6,29 +6,30 @@ import java.util.List;
 import java.util.UUID;
 
 /** A sale created by the till. Prices and names arrive frozen from the local catalog. */
-public record CreateSaleCommand(UUID tenantId, UUID locationId, UUID deviceId, UUID userId,
-                                UUID shiftId, SaleType type, String tableLabel, long deliveryFeePesos,
+public record CreateSaleCommand(UUID saleId, UUID tenantId, UUID locationId, UUID deviceId,
+                                UUID userId, UUID shiftId, SaleType type, String tableLabel,
+                                long deliveryFeePesos,
                                 List<ItemCommand> items, PaymentMethod method, UUID operationId,
                                 String displayCode, long deviceSeq, Instant clientCreatedAt) {
 
   public CreateSaleCommand withType(SaleType newType) {
-    return new CreateSaleCommand(tenantId, locationId, deviceId, userId, shiftId, newType,
+    return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, newType,
         tableLabel, deliveryFeePesos, items, method, operationId, displayCode, deviceSeq,
         clientCreatedAt);
   }
 
   public CreateSaleCommand withTableLabel(String label) {
-    return new CreateSaleCommand(tenantId, locationId, deviceId, userId, shiftId, type, label,
+    return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, label,
         deliveryFeePesos, items, method, operationId, displayCode, deviceSeq, clientCreatedAt);
   }
 
   public CreateSaleCommand withDeliveryFee(long feePesos) {
-    return new CreateSaleCommand(tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
+    return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
         feePesos, items, method, operationId, displayCode, deviceSeq, clientCreatedAt);
   }
 
   public CreateSaleCommand withItems(List<ItemCommand> newItems) {
-    return new CreateSaleCommand(tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
+    return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
         deliveryFeePesos, newItems, method, operationId, displayCode, deviceSeq, clientCreatedAt);
   }
 

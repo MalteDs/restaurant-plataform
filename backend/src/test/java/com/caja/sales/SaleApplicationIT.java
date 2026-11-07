@@ -176,7 +176,8 @@ class SaleApplicationIT {
                                         CreateSaleCommand.ModifierCommand... modifiers) {
     var items = List.of(new CreateSaleCommand.ItemCommand(productId, "Producto", "HAMBURGUESAS",
         quantity, unitPrice, null, null, List.of(modifiers), List.of()));
-    return new CreateSaleCommand(ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(),
+    return new CreateSaleCommand(java.util.UUID.randomUUID(), ctx.tenantId(), ctx.locationId(),
+        ctx.deviceId(), ctx.userId(),
         ctx.shiftId(), SaleType.COUNTER, null, 0, items, PaymentMethod.valueOf(method),
         UUID.randomUUID(), ctx.nextDisplayCode(), ctx.seq().get(), Instant.now());
   }
