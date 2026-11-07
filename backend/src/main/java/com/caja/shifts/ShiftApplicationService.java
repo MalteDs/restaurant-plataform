@@ -1,5 +1,6 @@
 package com.caja.shifts;
 
+import com.caja.audit.AuditService;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -13,9 +14,11 @@ public class ShiftApplicationService {
   private static final ZoneId OPERATING_ZONE = ZoneId.of("America/Bogota");
 
   private final JdbcTemplate jdbc;
+  private final AuditService audit;
 
-  public ShiftApplicationService(JdbcTemplate jdbc) {
+  public ShiftApplicationService(JdbcTemplate jdbc, AuditService audit) {
     this.jdbc = jdbc;
+    this.audit = audit;
   }
 
   @Transactional
@@ -87,6 +90,9 @@ public class ShiftApplicationService {
         command.method(), LocalDate.now(OPERATING_ZONE));
     jdbc.update("update sales set status = 'REFUNDED' where id = ?", command.saleId());
     jdbc.update("update orders set status = 'REFUNDED' where sale_id = ?", command.saleId());
+    audit.record(command.tenantId(), command.locationId(), command.userId(), "REFUND_CREATED",
+        "sale", command.saleId(),
+        java.util.Map.of("amountPesos", saleTotal, "reason", command.reason()));
     return new Refund(refundId, command.saleId(), saleTotal, command.method());
   }
 
@@ -101,6 +107,9 @@ public class ShiftApplicationService {
         where id = ? and tenant_id = ? and location_id = ? and closed_at is null
         """, command.countedCashPesos(), expected, expected, difference, command.shiftId(),
         command.tenantId(), command.locationId());
+    audit.record(command.tenantId(), command.locationId(), null, "SHIFT_CLOSED", "shift",
+        command.shiftId(),
+        java.util.Map.of("expectedPesos", expected, "differencePesos", difference));
     return new ShiftClose(command.shiftId(), expected, difference);
   }
 

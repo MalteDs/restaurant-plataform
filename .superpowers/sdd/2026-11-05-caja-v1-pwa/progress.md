@@ -1,0 +1,2 @@
+Task 7: RED/GREEN con `ReportsIT` 4/4 y suite completa 41 pruebas, 0 fallos. Resumen con ventas brutas, devoluciones, neto, medios de pago, costo, gastos, utilidad operativa, ticket promedio y desgloses por dia/hora/producto; gastos solo MANAGER/ADMIN; auditoria de devoluciones, cierres, gastos y cambios de catalogo.
+Task 7: Ruling: `averageTicketPesos = netSalesPesos / orders` (ticket promedio sobre ventas netas) — si es incorrecto, se cambia a ventas brutas.

@@ -1,0 +1,19 @@
+package com.caja.reports;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public record Summary(long salesPesos, long refundsPesos, long netSalesPesos, long cashPesos,
+                      long cardPesos, long brebPesos, int orders, int refundCount,
+                      long averageTicketPesos, long costPesos, long expensesPesos,
+                      long operatingProfitPesos, List<DayRow> byDay, List<HourRow> byHour,
+                      List<ProductRow> byProduct) {
+  public record DayRow(LocalDate date, long salesPesos) {
+  }
+
+  public record HourRow(int hour, long salesPesos) {
+  }
+
+  public record ProductRow(String name, long quantity, long salesPesos) {
+  }
+}

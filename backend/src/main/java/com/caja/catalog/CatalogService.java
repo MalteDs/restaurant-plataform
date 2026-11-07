@@ -5,6 +5,7 @@ import com.caja.catalog.CatalogSnapshot.ComponentView;
 import com.caja.catalog.CatalogSnapshot.ModifierGroupView;
 import com.caja.catalog.CatalogSnapshot.ModifierView;
 import com.caja.catalog.CatalogSnapshot.ProductView;
+import com.caja.audit.AuditService;
 import com.caja.shared.tenant.TenantId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -23,9 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CatalogService {
   private final JdbcTemplate jdbc;
+  private final AuditService audit;
 
-  public CatalogService(JdbcTemplate jdbc) {
+  public CatalogService(JdbcTemplate jdbc, AuditService audit) {
     this.jdbc = jdbc;
+    this.audit = audit;
   }
 
   public List<ProductView> findAll(TenantId tenantId, UUID locationId) {
@@ -137,6 +140,8 @@ public class CatalogService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "El producto ya existe o es invalido");
     }
     bumpVersion(tenantId, locationId);
+    audit.record(tenantId.value(), locationId, null, "CATALOG_PRODUCT_CREATED", "product", id,
+        Map.of("name", name, "pricePesos", pricePesos));
     return id;
   }
 
