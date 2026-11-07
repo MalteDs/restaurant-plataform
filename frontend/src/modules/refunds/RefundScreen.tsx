@@ -11,6 +11,7 @@ export default function RefundScreen() {
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   async function refresh() {
     const rows = await db.sales.orderBy('createdAt').reverse().limit(50).toArray()
@@ -27,6 +28,10 @@ export default function RefundScreen() {
     }
     setError('')
     setMessage('')
+    if (submitting) {
+      return
+    }
+    setSubmitting(true)
     try {
       const result = await refundSale({ saleId: selected.id, reason })
       setMessage(`Devolución de $${result.amountPesos.toLocaleString('es-CO')} registrada`)
@@ -35,6 +40,8 @@ export default function RefundScreen() {
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo devolver')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -83,7 +90,7 @@ export default function RefundScreen() {
                   onChange={(event) => setReason(event.target.value)} />
               </label>
               <div className="flex gap-2">
-                <Button onClick={onRefund}>Confirmar devolución</Button>
+                <Button onClick={onRefund} disabled={submitting}>Confirmar devolución</Button>
                 <Button variant="ghost" onClick={() => setSelected(null)}>Cancelar</Button>
               </div>
             </div>

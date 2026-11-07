@@ -13,6 +13,7 @@
 2. Elige el archivo `.jsonl` más reciente exportado en **Recuperación**.
 3. Confirma dos veces. La restauración es idempotente: puedes importar el mismo archivo varias veces sin duplicar.
 4. Inicia sesión y verifica el indicador **Pendientes**; luego espera a **Al día**.
+5. El respaldo incluye el token y el prefijo del dispositivo: al restaurarlo en el mismo equipo (o en un reemplazo) la cola continúa con la misma identidad. **No revoques el dispositivo anterior** hasta que la cola esté drenada.
 
 ## 3. Respaldo de las ventas pendientes
 
@@ -36,8 +37,8 @@
 
 1. Un administrador entra a **Administración → Dispositivos**.
 2. Registra un dispositivo nuevo con un código distinto (por ejemplo `B`).
-3. El dispositivo anterior queda revocado; conserva la cola local sin borrarla.
-4. Si había ventas pendientes en el dispositivo revocado, expórtalas y restáuralas en el nuevo.
+3. Si el dispositivo anterior todavía tiene ventas pendientes, **no lo revoques**: exporta sus pendientes, restáuralos en el reemplazo (el respaldo conserva el token) y espera **Al día**. Después revócalo.
+4. Si ya fue revocado, sus operaciones reciben 401 y la cola queda retenida: restaura el respaldo en un navegador limpio y pide al administrador que habilite el token anterior mientras se drena.
 
 ## 6. Sincronización atascada
 

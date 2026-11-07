@@ -31,6 +31,8 @@ async function seed(ids: string[]) {
   const db = openDb(`test-recovery-${crypto.randomUUID()}`)
   opened.push(db)
   await db.operations.bulkPut(ids.map((id, index) => operation(id, index + 1)))
+  await db.meta.put({ key: 'devicePrefix', value: 'ALM-B' })
+  await db.meta.put({ key: 'operationSeq', value: 7 })
   return db
 }
 
@@ -46,6 +48,8 @@ it('exporta e importa sin duplicar', async () => {
   await importPending(blob, reopened)
 
   expect(await reopened.operations.count()).toBe(2)
+  expect((await reopened.meta.get('devicePrefix'))?.value).toBe('ALM-B')
+  expect((await reopened.meta.get('operationSeq'))?.value).toBe(7)
 })
 
 it('rechaza un archivo corrupto sin tocar la base', async () => {

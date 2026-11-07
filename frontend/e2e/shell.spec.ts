@@ -4,11 +4,13 @@ test('la app carga desde caché sin red y muestra login', async ({ page, context
   await page.goto('/login')
   await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
 
-  await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, {
-    timeout: 20_000
-  })
+  // Wait for the service worker registration, then reload so this page is controlled.
+  await page.evaluate(() => navigator.serviceWorker.ready)
   await page.reload()
   await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
+  await page.waitForFunction(() => navigator.serviceWorker.controller != null, null, {
+    timeout: 20_000
+  })
 
   await context.setOffline(true)
   await page.reload()

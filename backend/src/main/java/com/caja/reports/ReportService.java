@@ -44,11 +44,12 @@ public class ReportService {
         where tenant_id = ? and location_id = ? and expense_date between ? and ?
         """, tenantId, locationId, from, to);
     var costPesos = total("""
-        select coalesce(sum(coalesce(si.cost_pesos, 0)), 0)
+        select coalesce(sum(coalesce(si.cost_pesos, 0) * si.quantity), 0)
         from sale_items si
         join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
                      and s.location_id = si.location_id
         where s.tenant_id = ? and s.location_id = ? and s.operational_date between ? and ?
+          and s.status <> 'REFUNDED'
         """, tenantId, locationId, from, to);
 
     var netSalesPesos = salesPesos - refundsPesos;

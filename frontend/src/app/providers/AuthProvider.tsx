@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { request } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
@@ -76,6 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     []
   )
+
+  useEffect(() => {
+    if (!user || !navigator.onLine) {
+      return
+    }
+    const refreshCatalog = () => void syncCatalog(db).catch(() => undefined)
+    refreshCatalog()
+    const timer = window.setInterval(refreshCatalog, 30 * 60_000)
+    return () => window.clearInterval(timer)
+  }, [user])
 
   const logout = useCallback(() => {
     localStorage.removeItem(USER_KEY)

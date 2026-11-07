@@ -58,7 +58,10 @@ export async function localSummary(
     .reduce((sum, payment) => sum + payment.amountPesos, 0)
   const salesPesos = sales.reduce((sum, sale) => sum + sale.totalPesos, 0)
   const refundsPesos = refunds.reduce((sum, refund) => sum + refund.amountPesos, 0)
-  const costPesos = items.reduce((sum, item) => sum + (item.costPesos ?? 0) * item.quantity, 0)
+  const refundedSales = new Set(sales.filter((sale) => sale.status === 'REFUNDED').map((sale) => sale.id))
+  const costPesos = items
+    .filter((item) => !refundedSales.has(item.saleId))
+    .reduce((sum, item) => sum + (item.costPesos ?? 0) * item.quantity, 0)
   const netSalesPesos = salesPesos - refundsPesos
   const orders = sales.length
 

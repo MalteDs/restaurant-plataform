@@ -20,7 +20,7 @@ export async function importPending(
     throw new Error('El archivo está vacío')
   }
 
-  let header: { version?: number }
+  let header: { version?: number; deviceToken?: string; meta?: Array<{ key: string; value: unknown }> }
   try {
     header = JSON.parse(lines[0])
   } catch {
@@ -45,8 +45,12 @@ export async function importPending(
 
   return database.transaction(
     'rw',
-    [database.operations, database.sales, database.saleItems, database.payments, database.refunds],
+    [database.operations, database.sales, database.saleItems, database.payments, database.refunds,
+      database.shifts, database.meta],
     async () => {
+      for (const row of header.meta ?? []) {
+        await database.meta.put(row)
+      }
       let imported = 0
       let skipped = 0
       for (const record of records) {
@@ -67,9 +71,17 @@ export async function importPending(
         if (record.refund) {
           await database.refunds.put(record.refund as never)
         }
+        if (record.shift) {
+          await database.shifts.put(record.shift as never)
+        }
         imported++
       }
       return { imported, skipped }
     }
-  )
+  ).then((result) => {
+    if (header.deviceToken) {
+      localStorage.setItem('caja.deviceToken', header.deviceToken)
+    }
+    return result
+  })
 }

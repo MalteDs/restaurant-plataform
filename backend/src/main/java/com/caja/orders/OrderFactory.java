@@ -19,7 +19,8 @@ public class OrderFactory {
         insert into orders(id, tenant_id, location_id, sale_id, source, status, operational_date)
         values (?, ?, ?, ?, 'CAJA', 'CHARGED', ?)
         """, orderId, command.tenantId(), command.locationId(), saleId,
-        java.sql.Date.valueOf(java.time.LocalDate.now(java.time.ZoneId.of("America/Bogota"))));
+        java.sql.Date.valueOf(command.clientCreatedAt().atZone(
+            java.time.ZoneId.of("America/Bogota")).toLocalDate()));
     for (var item : command.items()) {
       jdbc.update("""
           insert into order_items(id, tenant_id, location_id, order_id, product_id, product_name,

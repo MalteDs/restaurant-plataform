@@ -46,26 +46,28 @@ public class ShiftApplicationService {
   }
 
   /** Cash the drawer should hold: opening + cash sales - cash refunds + deposits - withdrawals. */
-  public long expectedCash(UUID shiftId) {
-    var opening = jdbc.queryForObject("select opening_cash_pesos from shifts where id = ?",
-        Long.class, shiftId);
+  public long expectedCash(UUID tenantId, UUID locationId, UUID shiftId) {
+    var opening = jdbc.queryForObject("""
+        select opening_cash_pesos from shifts
+        where id = ? and tenant_id = ? and location_id = ?
+        """, Long.class, shiftId, tenantId, locationId);
     var cashSales = jdbc.queryForObject("""
         select coalesce(sum(s.total_pesos), 0)
         from sales s join payments p on p.sale_id = s.id
-        where s.shift_id = ? and p.method = 'CASH'
-        """, Long.class, shiftId);
+        where s.shift_id = ? and s.tenant_id = ? and s.location_id = ? and p.method = 'CASH'
+        """, Long.class, shiftId, tenantId, locationId);
     var cashRefunds = jdbc.queryForObject("""
         select coalesce(sum(amount_pesos), 0) from refunds
-        where shift_id = ? and method = 'CASH'
-        """, Long.class, shiftId);
+        where shift_id = ? and tenant_id = ? and location_id = ? and method = 'CASH'
+        """, Long.class, shiftId, tenantId, locationId);
     var deposits = jdbc.queryForObject("""
         select coalesce(sum(amount_pesos), 0) from cash_movements
-        where shift_id = ? and type = 'DEPOSIT'
-        """, Long.class, shiftId);
+        where shift_id = ? and tenant_id = ? and location_id = ? and type = 'DEPOSIT'
+        """, Long.class, shiftId, tenantId, locationId);
     var withdrawals = jdbc.queryForObject("""
         select coalesce(sum(amount_pesos), 0) from cash_movements
-        where shift_id = ? and type = 'WITHDRAWAL'
-        """, Long.class, shiftId);
+        where shift_id = ? and tenant_id = ? and location_id = ? and type = 'WITHDRAWAL'
+        """, Long.class, shiftId, tenantId, locationId);
     return opening + cashSales - cashRefunds + deposits - withdrawals;
   }
 
@@ -92,9 +94,11 @@ public class ShiftApplicationService {
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::payment_method, ?)
         """, refundId, command.tenantId(), command.locationId(), command.saleId(),
         command.shiftId(), command.deviceId(), command.userId(), command.reason(), saleTotal,
-        command.method(), LocalDate.now(OPERATING_ZONE));
-    jdbc.update("update sales set status = 'REFUNDED' where id = ?", command.saleId());
-    jdbc.update("update orders set status = 'REFUNDED' where sale_id = ?", command.saleId());
+        command.method(), command.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate());
+    jdbc.update("update sales set status = 'REFUNDED' where id = ? and tenant_id = ? and location_id = ?",
+        command.saleId(), command.tenantId(), command.locationId());
+    jdbc.update("update orders set status = 'REFUNDED' where sale_id = ? and tenant_id = ? and location_id = ?",
+        command.saleId(), command.tenantId(), command.locationId());
     audit.record(command.tenantId(), command.locationId(), command.userId(), "REFUND_CREATED",
         "sale", command.saleId(),
         java.util.Map.of("amountPesos", saleTotal, "reason", command.reason()));
@@ -103,16 +107,21 @@ public class ShiftApplicationService {
 
   @Transactional
   public ShiftClose close(CloseShiftCommand command) {
-    var expected = expectedCash(command.shiftId());
+    var expected = expectedCash(command.tenantId(), command.locationId(), command.shiftId());
+    var expectedLocal = command.expectedLocalPesos() == null ? expected
+        : command.expectedLocalPesos();
     var difference = command.countedCashPesos() - expected;
-    jdbc.update("""
+    var updated = jdbc.update("""
         update shifts
         set closed_at = now(), counted_cash_pesos = ?, expected_local_pesos = ?,
             expected_server_pesos = ?, difference_pesos = ?, updated_at = now()
         where id = ? and tenant_id = ? and location_id = ? and closed_at is null
-        """, command.countedCashPesos(), expected, expected, difference, command.shiftId(),
+        """, command.countedCashPesos(), expectedLocal, expected, difference, command.shiftId(),
         command.tenantId(), command.locationId());
-    audit.record(command.tenantId(), command.locationId(), null, "SHIFT_CLOSED", "shift",
+    if (updated == 0) {
+      throw new IllegalStateException("El turno no existe o ya está cerrado");
+    }
+    audit.record(command.tenantId(), command.locationId(), command.userId(), "SHIFT_CLOSED", "shift",
         command.shiftId(),
         java.util.Map.of("expectedPesos", expected, "differencePesos", difference));
     return new ShiftClose(command.shiftId(), expected, difference);
@@ -120,13 +129,13 @@ public class ShiftApplicationService {
 
   @Transactional
   public void movement(UUID tenantId, UUID locationId, UUID shiftId, UUID userId, String type,
-                        long amountPesos, String reason) {
+                        long amountPesos, String reason, LocalDate operationalDate) {
     jdbc.update("""
         insert into cash_movements(id, tenant_id, location_id, shift_id, user_id, type,
                                    amount_pesos, reason, operational_date)
         values (?, ?, ?, ?, ?, ?::cash_movement_type, ?, ?, ?)
         """, UUID.randomUUID(), tenantId, locationId, shiftId, userId, type, amountPesos, reason,
-        LocalDate.now(OPERATING_ZONE));
+        operationalDate);
   }
 
   private void requireOpenShift(RefundCommand command) {

@@ -5,6 +5,7 @@ export interface RecoverySale {
   saleItems?: unknown[]
   payment?: unknown
   refund?: unknown
+  shift?: unknown
 }
 
 export interface RecoveryRecord extends RecoverySale {
@@ -24,7 +25,9 @@ export async function exportPending(database: CajaDb = db, now = new Date()): Pr
     JSON.stringify({
       version: HEADER_VERSION,
       deviceId: (await database.meta.get('devicePrefix'))?.value ?? 'unknown',
-      exportedAt: now.toISOString()
+      exportedAt: now.toISOString(),
+      deviceToken: localStorage.getItem('caja.deviceToken'),
+      meta: await database.meta.toArray()
     })
   ]
 
@@ -44,6 +47,9 @@ export async function exportPending(database: CajaDb = db, now = new Date()): Pr
         record.sale = await database.sales.get(operation.entityId)
         record.refund = (await database.refunds.toArray())
           .find((refund) => refund.saleId === operation.entityId)
+      }
+      if (operation.type === 'OPEN_SHIFT' || operation.type === 'CLOSE_SHIFT') {
+        record.shift = await database.shifts.get(operation.entityId)
       }
     }
     lines.push(JSON.stringify(record))

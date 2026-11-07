@@ -3,7 +3,6 @@ package com.caja.sales;
 import com.caja.orders.OrderFactory;
 import com.caja.payments.PaymentService;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -27,7 +26,7 @@ public class SaleApplicationService {
 
   @Transactional
   public AppliedSale apply(CreateSaleCommand command) {
-    var existing = querySale(command.saleId());
+    var existing = querySale(command.tenantId(), command.locationId(), command.saleId());
     if (existing != null) {
       return existing;
     }
@@ -42,7 +41,8 @@ public class SaleApplicationService {
         """, saleId, command.tenantId(), command.locationId(), command.deviceId(), command.userId(),
         command.shiftId(), command.type().name(), command.tableLabel(), command.deliveryFeePesos(),
         total, command.displayCode(), command.deviceSeq(),
-        LocalDate.now(OPERATING_ZONE), Timestamp.from(command.clientCreatedAt()));
+        command.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate(),
+        Timestamp.from(command.clientCreatedAt()));
 
     for (var item : command.items()) {
       insertItem(command, saleId, item);
@@ -53,24 +53,24 @@ public class SaleApplicationService {
         command.deliveryFeePesos());
   }
 
-  public AppliedSale find(UUID saleId) {
-    var found = querySale(saleId);
+  public AppliedSale find(UUID tenantId, UUID locationId, UUID saleId) {
+    var found = querySale(tenantId, locationId, saleId);
     if (found == null) {
       throw new IllegalStateException("Venta no encontrada");
     }
     return found;
   }
 
-  private AppliedSale querySale(UUID saleId) {
+  private AppliedSale querySale(UUID tenantId, UUID locationId, UUID saleId) {
     return jdbc.query("""
         select id, shift_id, type, display_code, total_pesos, delivery_fee_pesos
         from sales
-        where id = ?
+        where id = ? and tenant_id = ? and location_id = ?
         """, (rs, rowNum) -> new AppliedSale(
         rs.getObject("id", UUID.class), rs.getObject("shift_id", UUID.class),
         SaleType.valueOf(rs.getString("type")), rs.getString("display_code"),
-        rs.getLong("total_pesos"), rs.getLong("delivery_fee_pesos")), saleId)
-        .stream().findFirst().orElse(null);
+        rs.getLong("total_pesos"), rs.getLong("delivery_fee_pesos")), saleId, tenantId,
+        locationId).stream().findFirst().orElse(null);
   }
 
   private void requireOpenShift(CreateSaleCommand command) {

@@ -39,7 +39,7 @@ export async function sell(page: Page, product: string) {
     await add.click()
   }
   await page.getByRole('button', { name: /^cobrar$/i }).click()
-  await expect(page.getByText(/venta ALM-A-\d+ guardada/i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/venta ALM-[A-Z]-\d+ guardada/i)).toBeVisible({ timeout: 10_000 })
 }
 
 export async function closeShift(page: Page, counted: number) {

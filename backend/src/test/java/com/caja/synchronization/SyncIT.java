@@ -81,6 +81,19 @@ class SyncIT {
         UUID.nameUUIDFromBytes("op-4".getBytes(StandardCharsets.UTF_8))));
   }
 
+  @Test void rejectedOperationStaysRejectedOnRetry() throws Exception {
+    var ctx = fixture();
+    jdbc.update("update shifts set closed_at = now() where id = ?", ctx.shiftId());
+    var operation = saleOperation(ctx, "op-rejected", 1, 16500, Instant.now());
+
+    var first = push(ctx, List.of(operation));
+    var second = push(ctx, List.of(operation));
+
+    assertEquals("REJECTED", syncStatus(first.get(0)));
+    assertEquals("REJECTED", syncStatus(second.get(0)));
+    assertEquals(0, countSales(ctx));
+  }
+
   @Test void twoHundredRetriesDoNotDuplicateTheSale() throws Exception {
     var ctx = fixture();
     var operation = saleOperation(ctx, "op-200", 1, 16500, Instant.now());

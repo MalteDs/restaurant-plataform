@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../infrastructure/api/client'
+import { db } from '../../infrastructure/database/schema'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 interface Device {
@@ -32,13 +33,15 @@ export default function DevicesScreen() {
     event.preventDefault()
     setError('')
     try {
-      const created = await request<{ deviceToken: string }>('/api/devices/register', {
-        method: 'POST',
-        body: JSON.stringify({ code, name })
-      })
+      const created = await request<{ deviceToken: string; code: string }>(
+        '/api/devices/register',
+        { method: 'POST', body: JSON.stringify({ code, name }) }
+      )
       setToken(created.deviceToken)
-      // The device that registers itself keeps the token for sync on this browser.
+      // The device that registers itself keeps the token and the display prefix.
       localStorage.setItem('caja.deviceToken', created.deviceToken)
+      const location = await request<{ code: string }>('/api/locations/current')
+      await db.meta.put({ key: 'devicePrefix', value: `${location.code}-${created.code}` })
       setCode('')
       setName('')
       await refresh()

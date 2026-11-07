@@ -15,7 +15,6 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,9 +51,9 @@ public class SyncService {
         .toList();
 
     var pending = new ArrayList<SyncOperation>();
-    var expected = nextSeq(batch.deviceId());
+    var expected = nextSeq(batch);
     for (var operation : sorted) {
-      if (findOperation(operation.operationId()) != null) {
+      if (findOperation(operation.operationId(), batch) != null) {
         continue;
       }
       if (operation.seq() != expected) {
@@ -67,11 +66,15 @@ public class SyncService {
 
     var results = new ArrayList<SyncResult>();
     for (var operation : sorted) {
-      var existing = findOperation(operation.operationId());
+      var existing = findOperation(operation.operationId(), batch);
       if (existing != null) {
         if (!existing.hash().equals(hash(operation.payload()))) {
           results.add(new SyncResult(operation.operationId(), SyncStatus.REJECTED, Map.of(),
               "la operacion ya se sincronizo con otro contenido"));
+        } else if (!existing.applied()) {
+          results.add(new SyncResult(operation.operationId(), SyncStatus.REJECTED,
+              existing.result(), String.valueOf(existing.result().getOrDefault("error",
+              "la operacion fue rechazada"))));
         } else {
           results.add(new SyncResult(operation.operationId(), SyncStatus.DUPLICATE,
               existing.result(), null));
@@ -92,7 +95,7 @@ public class SyncService {
       var outcome = dispatch(operation, batch);
       record(operation, batch, hash, outcome.entityId(), outcome.result(), clockSkew, null);
       return new SyncResult(operation.operationId(), SyncStatus.APPLIED, outcome.result(), null);
-    } catch (IllegalStateException e) {
+    } catch (IllegalStateException | IllegalArgumentException e) {
       record(operation, batch, hash, null, Map.of("error", e.getMessage()), clockSkew, e.getMessage());
       return new SyncResult(operation.operationId(), SyncStatus.REJECTED, Map.of(), e.getMessage());
     }
@@ -144,18 +147,22 @@ public class SyncService {
         var shiftId = shifts.open(new OpenShiftCommand(uuid(payload.get("shiftId")),
             batch.tenantId(), batch.locationId(), batch.deviceId(), operation.userId(),
             ((Number) payload.get("openingCashPesos")).longValue(),
-            LocalDate.now(OPERATING_ZONE)));
+            operation.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate()));
         yield new Outcome(shiftId, Map.of("shiftId", shiftId.toString()));
       }
       case "CASH_MOVEMENT" -> {
         shifts.movement(batch.tenantId(), batch.locationId(), uuid(payload.get("shiftId")),
             operation.userId(), (String) payload.get("movementType"),
-            ((Number) payload.get("amountPesos")).longValue(), (String) payload.get("reason"));
+            ((Number) payload.get("amountPesos")).longValue(), (String) payload.get("reason"),
+            operation.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate());
         yield new Outcome(null, Map.of("ok", true));
       }
       case "CLOSE_SHIFT" -> {
         var close = shifts.close(new CloseShiftCommand(batch.tenantId(), batch.locationId(),
-            uuid(payload.get("shiftId")), ((Number) payload.get("countedCashPesos")).longValue()));
+            uuid(payload.get("shiftId")), ((Number) payload.get("countedCashPesos")).longValue(),
+            payload.get("expectedPesos") == null ? null
+                : ((Number) payload.get("expectedPesos")).longValue(),
+            operation.userId()));
         yield new Outcome(close.shiftId(), Map.of(
             "shiftId", close.shiftId().toString(),
             "expectedPesos", close.expectedPesos(),
@@ -221,20 +228,28 @@ public class SyncService {
     return last == null ? 1 : last + 1;
   }
 
-  private ExistingOperation findOperation(UUID operationId) {
+  private long nextSeq(SyncBatch batch) {
+    var last = jdbc.queryForObject("""
+        select coalesce(max(seq), 0) from sync_operations
+        where device_id = ? and tenant_id = ? and location_id = ?
+        """, Long.class, batch.deviceId(), batch.tenantId(), batch.locationId());
+    return last == null ? 1 : last + 1;
+  }
+
+  private ExistingOperation findOperation(UUID operationId, SyncBatch batch) {
     return jdbc.query("""
-        select payload_hash, result_json
+        select payload_hash, result_json, applied_at
         from sync_operations
-        where operation_id = ?
+        where operation_id = ? and tenant_id = ? and location_id = ?
         """, (rs, rowNum) -> {
           try {
             return new ExistingOperation(rs.getString("payload_hash"),
-                json.readValue(rs.getString("result_json"), Map.class));
+                json.readValue(rs.getString("result_json"), Map.class),
+                rs.getTimestamp("applied_at") != null);
           } catch (Exception e) {
             throw new IllegalStateException("No se pudo leer la operacion sincronizada", e);
           }
-        }, operationId)
-        .stream().findFirst().orElse(null);
+        }, operationId, batch.tenantId(), batch.locationId()).stream().findFirst().orElse(null);
   }
 
   private String hash(Map<String, Object> payload) {
@@ -258,6 +273,6 @@ public class SyncService {
   private record Outcome(UUID entityId, Map<String, Object> result) {
   }
 
-  private record ExistingOperation(String hash, Map<String, Object> result) {
+  private record ExistingOperation(String hash, Map<String, Object> result, boolean applied) {
   }
 }

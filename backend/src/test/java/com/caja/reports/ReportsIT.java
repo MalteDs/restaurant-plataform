@@ -90,6 +90,14 @@ class ReportsIT {
     assertEquals(8500, summary(ctx).get("operatingProfitPesos"));
   }
 
+  @Test void costCountsQuantityAndExcludesRefundedSales() throws Exception {
+    var ctx = fixture();
+    saleWithCost(ctx, 33000, 2, 5000, "CHARGED");
+    saleWithCost(ctx, 9000, 1, 9000, "REFUNDED");
+
+    assertEquals(10000, summary(ctx).get("costPesos"));
+  }
+
   @Test void refundsAndExpensesAreAudited() throws Exception {
     var ctx = fixture();
     sale(ctx, 16500, "CASH", "SENCILLA");
@@ -165,6 +173,28 @@ class ReportsIT {
         insert into orders(id, tenant_id, location_id, sale_id, source, status, operational_date)
         values (?, ?, ?, ?, 'CAJA', 'CHARGED', current_date)
         """, UUID.randomUUID(), ctx.tenantId(), ctx.locationId(), saleId);
+  }
+
+  private void saleWithCost(Ctx ctx, long totalPesos, int quantity, long unitCost, String status) {
+    var saleId = UUID.randomUUID();
+    jdbc.update("""
+        insert into sales(id, tenant_id, location_id, device_id, user_id, shift_id, type,
+                          total_pesos, status, display_code, device_seq, operational_date,
+                          client_created_at)
+        values (?, ?, ?, ?, ?, ?, 'COUNTER', ?, ?::sale_status, ?, ?, current_date, now())
+        """, saleId, ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(), ctx.shiftId(),
+        totalPesos, status, "ALM-C-" + UUID.randomUUID().toString().substring(0, 6),
+        Math.abs(UUID.randomUUID().getMostSignificantBits() % 100000));
+    jdbc.update("insert into payments(id, tenant_id, location_id, sale_id, method, amount_pesos) "
+        + "values (?, ?, ?, ?, 'CASH', ?)", UUID.randomUUID(), ctx.tenantId(), ctx.locationId(),
+        saleId, totalPesos);
+    jdbc.update("""
+        insert into sale_items(id, tenant_id, location_id, sale_id, product_id, product_name,
+                               category_name, quantity, unit_price_pesos, cost_pesos,
+                               line_total_pesos)
+        values (?, ?, ?, ?, ?, 'PRODUCTO', 'HAMBURGUESAS', ?, ?, ?, ?)
+        """, UUID.randomUUID(), ctx.tenantId(), ctx.locationId(), saleId, ctx.productId(), quantity,
+        totalPesos / quantity, unitCost, totalPesos);
   }
 
   private void refund(Ctx ctx, long amountPesos) {

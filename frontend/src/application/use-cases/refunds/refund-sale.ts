@@ -26,13 +26,6 @@ export async function refundSale(
   if (!reason) {
     throw new Error('El motivo es obligatorio')
   }
-  const sale = await database.sales.get(input.saleId)
-  if (!sale) {
-    throw new Error('La venta no existe')
-  }
-  if (sale.status === 'REFUNDED') {
-    throw new Error('La venta ya fue devuelta')
-  }
   const shift = (await database.shifts.toArray()).find((row) => row.closedAt === null)
   if (!shift) {
     throw new Error('No hay turno abierto')
@@ -43,8 +36,16 @@ export async function refundSale(
   }
 
   const refundId = crypto.randomUUID()
-  await database.transaction('rw', [database.refunds, database.sales, database.operations, database.meta],
+  const result = await database.transaction('rw', [database.refunds, database.sales, database.operations, database.meta],
     async () => {
+      // Read inside the write transaction so two taps cannot both refund the same sale.
+      const sale = await database.sales.get(input.saleId)
+      if (!sale) {
+        throw new Error('La venta no existe')
+      }
+      if (sale.status === 'REFUNDED') {
+        throw new Error('La venta ya fue devuelta')
+      }
       const sequenceRow = await database.meta.get('operationSeq')
       const seq = (typeof sequenceRow?.value === 'number' ? sequenceRow.value : 0) + 1
       await database.meta.put({ key: 'operationSeq', value: seq })
@@ -75,8 +76,9 @@ export async function refundSale(
           reason
         }
       })
+      return { refundId, amountPesos: sale.totalPesos }
     })
 
   notifyOperationQueued()
-  return { refundId, amountPesos: sale.totalPesos }
+  return result
 }

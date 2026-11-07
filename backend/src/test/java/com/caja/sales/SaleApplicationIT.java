@@ -38,7 +38,7 @@ class SaleApplicationIT {
     assertEquals(33000, applied.totalPesos());
     assertEquals("ALM-A-000001", applied.displayCode());
     jdbc.update("update products set price_pesos = 20000 where id = ?", product);
-    assertEquals(33000, sales.find(applied.id()).totalPesos());
+    assertEquals(33000, sales.find(ctx.tenantId(), ctx.locationId(), applied.id()).totalPesos());
     assertEquals("CAJA", jdbc.queryForObject("select source from orders where sale_id = ?",
         String.class, applied.id()));
     assertEquals(1, jdbc.queryForObject("select count(*) from order_items where order_id = "
@@ -98,13 +98,13 @@ class SaleApplicationIT {
     var product = insertProduct(ctx, 16500);
     var sale = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH"));
 
-    assertEquals(66500, shifts.expectedCash(ctx.shiftId()));
+    assertEquals(66500, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
 
     var refund = shifts.applyRefund(new RefundCommand(ctx.tenantId(), ctx.locationId(),
         ctx.deviceId(), ctx.userId(), ctx.shiftId(), sale.id(), "CASH", "cobro equivocado",
         Instant.now()));
 
-    assertEquals(50000, shifts.expectedCash(ctx.shiftId()));
+    assertEquals(50000, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
     assertEquals(sale.id(), refund.saleId());
     assertEquals(16500, refund.amountPesos());
     assertEquals("REFUNDED", jdbc.queryForObject("select status from sales where id = ?",
@@ -142,8 +142,8 @@ class SaleApplicationIT {
         Instant.now()));
 
     // The refund belongs to the second shift, so the closed shift keeps its arqueo.
-    assertEquals(66500, shifts.expectedCash(ctx.shiftId()));
-    assertEquals(-16500, shifts.expectedCash(secondShift));
+    assertEquals(66500, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(-16500, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), secondShift));
   }
 
   private record Ctx(UUID tenantId, UUID locationId, UUID userId, UUID deviceId, UUID shiftId,

@@ -20,3 +20,8 @@ Task 15: fixed (E2E) la pantalla de venta cargaba el catalogo antes del sync -> 
 Task 15: Ruling: los reportes con red usan el resumen del servidor y sin red el resumen local; el resumen local no incluye gastos porque no se guardan offline — si es incorrecto, se agrega un store de gastos local.
 Task 15: Ruling: el E2E vive en `frontend/e2e/` (Playwright ya configurado ahi) en vez de la raiz `e2e/` del plan — si es incorrecto, se mueve con su configuracion.
 Task 15: minor (deferred): el escenario de 500 ventas offline en Windows 10/2 GB requiere hardware real; queda documentado en el runbook y pendiente de medicion.
+Final review: fixed rechazo que se volvia DUPLICATE (ahora `applied_at` decide y un rechazo sigue REJECTED), prefijo de dispositivo por sede+codigo (ALM-A/ALM-B), recuperacion exporta/restaura meta, token y turnos, costo por cantidad y sin ventas devueltas, devolucion atomica con boton bloqueado, refresh de token en 401 y catalogo cada 30 min, fechas operativas desde `clientCreatedAt`, cierre de turno con esperado local y control de filas, y filtros tenant/sede en las lecturas por id.
+Final review: verificado con backend 46 pruebas, frontend 23, E2E 3/3 en base limpia y respaldo/restauracion con 75 productos.
+Final review: minor (deferred): errores de constraint en sync siguen devolviendo 500 en vez de REJECTED por el rollback de la transaccion; con IDs de cliente y prefijo unico el caso es remoto.
+Final review: minor (deferred): si el refresh falla, la UI no redirige automaticamente a login; el usuario debe recargar.
+Final review: minor (deferred): `expected_local_pesos` se guarda pero la diferencia entre calculo local y servidor no se muestra en la UI.

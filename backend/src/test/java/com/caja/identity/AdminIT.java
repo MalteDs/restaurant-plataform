@@ -71,7 +71,8 @@ class AdminIT {
     mvc.perform(post("/api/devices/register").contentType(MediaType.APPLICATION_JSON)
             .header("Authorization", "Bearer " + admin)
             .content(json.writeValueAsString(Map.of("code", "A", "name", "Caja A"))))
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("A"));
 
     mvc.perform(get("/api/devices").header("Authorization", "Bearer " + admin))
         .andExpect(status().isOk())

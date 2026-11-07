@@ -40,7 +40,8 @@ public class DeviceRegistrationController {
         user.locationId());
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
         "deviceId", registration.deviceId(),
-        "deviceToken", registration.deviceToken()));
+        "deviceToken", registration.deviceToken(),
+        "code", request.code()));
   }
 
   @PostMapping("/{deviceId}/revoke")
