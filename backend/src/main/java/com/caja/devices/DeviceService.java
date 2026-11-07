@@ -27,6 +27,10 @@ public class DeviceService {
     }
   }
 
+  public java.util.List<Device> list(UUID tenantId, UUID locationId) {
+    return devices.list(tenantId, locationId);
+  }
+
   public boolean revoke(UUID deviceId, UUID tenantId, UUID locationId) {
     return devices.revoke(deviceId, tenantId, locationId) > 0;
   }

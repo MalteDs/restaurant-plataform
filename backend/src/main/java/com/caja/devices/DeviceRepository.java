@@ -28,6 +28,19 @@ public class DeviceRepository {
         DeviceStatus.valueOf(rs.getString("status"))), tokenHash).stream().findFirst();
   }
 
+  public java.util.List<Device> list(UUID tenantId, UUID locationId) {
+    return jdbc.query("""
+        select id, tenant_id, location_id, code, name, token_hash, status
+        from devices
+        where tenant_id = ? and location_id = ?
+        order by code
+        """, (rs, rowNum) -> new Device(
+        rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+        rs.getObject("location_id", UUID.class), rs.getString("code"), rs.getString("name"),
+        rs.getString("token_hash"), DeviceStatus.valueOf(rs.getString("status"))),
+        tenantId, locationId);
+  }
+
   public Device insert(UUID tenantId, UUID locationId, String code, String name, String tokenHash) {
     var id = UUID.randomUUID();
     jdbc.update("""

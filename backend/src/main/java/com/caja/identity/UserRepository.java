@@ -50,6 +50,38 @@ public class UserRepository {
         """, newHash, java.sql.Timestamp.from(expiresAt), userId, currentHash) > 0;
   }
 
+  public List<AdminUser> list(UUID tenantId, UUID locationId) {
+    return jdbc.query("""
+        select id, username, role, active
+        from users
+        where tenant_id = ? and location_id = ?
+        order by username
+        """, (rs, rowNum) -> new AdminUser(
+        rs.getObject("id", UUID.class), rs.getString("username"),
+        Role.valueOf(rs.getString("role")), rs.getBoolean("active")), tenantId, locationId);
+  }
+
+  public UUID insert(UUID tenantId, UUID locationId, String username, String passwordHash,
+                     String role) {
+    var id = UUID.randomUUID();
+    jdbc.update("""
+        insert into users(id, tenant_id, location_id, username, password_hash, role)
+        values (?, ?, ?, ?, ?, ?::user_role)
+        """, id, tenantId, locationId, username, passwordHash, role);
+    return id;
+  }
+
+  public int update(UUID id, UUID tenantId, UUID locationId, String role, Boolean active) {
+    return jdbc.update("""
+        update users
+        set role = coalesce(?::user_role, role), active = coalesce(?, active), updated_at = now()
+        where id = ? and tenant_id = ? and location_id = ?
+        """, role, active, id, tenantId, locationId);
+  }
+
+  public record AdminUser(UUID id, String username, Role role, boolean active) {
+  }
+
   private User map(java.sql.ResultSet rs) throws java.sql.SQLException {
     return new User(
         rs.getObject("id", UUID.class),
