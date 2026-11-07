@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../providers/AuthProvider'
 import { Button, Card, Input } from '../../shared/ui'
 import { ApiError } from '../../infrastructure/api/client'
@@ -89,6 +89,11 @@ export default function LoginScreen() {
             {submitting ? 'Entrando…' : 'Entrar'}
           </Button>
         </form>
+        <p className="mt-4 text-center text-sm">
+          <Link className="text-brand-600 hover:underline" to="/recovery">
+            Restaurar ventas pendientes
+          </Link>
+        </p>
       </Card>
     </main>
   )

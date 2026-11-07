@@ -1,8 +1,8 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 13 completada (devoluciones, gastos y administración).
-**Tarea en curso:** ninguna; Tarea 14 (exportar y restaurar pendientes) lista para iniciar.
+**Fase:** Tarea 14 completada (exportar y restaurar pendientes).
+**Tarea en curso:** ninguna; Tarea 15 (E2E, despliegue y documentación) lista para iniciar.
 **Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
@@ -22,7 +22,7 @@
 - [x] Tarea 11 — Motor de sincronización
 - [x] Tarea 12 — Cierre de turno, reportes locales y CSV
 - [x] Tarea 13 — Devoluciones, gastos y administración
-- [ ] Tarea 14 — Recuperación: exportar y restaurar pendientes
+- [x] Tarea 14 — Recuperación: exportar y restaurar pendientes
 - [ ] Tarea 15 — E2E offline, despliegue y documentación
 
 ## Notas de la sesión
@@ -48,7 +48,8 @@
 - Tarea 11: `pushPending` por lotes de 50 en orden de `seq`, backoff exponencial, disparadores online/visibilidad/30 s y estado visible `Pendientes | Sincronizando | Error | Al día | Sin conexión`.
 - Tarea 12: apertura y cierre de turno offline con arqueo, cola `CLOSE_SHIFT`, resumen local con desglose por categoría/día/hora/producto y exportación CSV con `;` y UTF-8.
 - Tarea 13: devoluciones offline con motivo, gastos solo online para MANAGER/ADMIN, pantallas de catálogo, usuarios, dispositivos y sede; endpoints admin de usuarios, dispositivos y sede en el backend.
-- Siguiente paso concreto: iniciar la Tarea 14 (exportar y restaurar pendientes).
+- Tarea 14: exportación JSONL de operaciones y ventas pendientes, restauración idempotente por `operationId`, pantalla `/recovery` con doble confirmación y carpeta de respaldo (File System Access con fallback a descarga).
+- Siguiente paso concreto: iniciar la Tarea 15 (E2E offline, despliegue y documentación).
 
 ## Decisiones pendientes
 
