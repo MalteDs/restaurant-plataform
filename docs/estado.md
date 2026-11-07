@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 2 completada (esquema multi-tenant, dinero y aislamiento).
-**Tarea en curso:** ninguna; Tarea 3 (identidad y autenticación) lista para iniciar.
-**Último commit de implementación:** `ee6a1c6` (`chore: spring boot modular monolith skeleton with postgres`).
+**Fase:** Tarea 7 completada (reportes centrales, gastos y auditoría).
+**Tarea en curso:** ninguna; Tarea 8 (shell PWA) lista para iniciar.
+**Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
 
@@ -15,7 +15,7 @@
 - [x] Tarea 4 — Catálogo
 - [x] Tarea 5 — Ventas, turnos y pedidos en el servidor
 - [x] Tarea 6 — Sync API idempotente
-- [ ] Tarea 7 — Reportes centrales, gastos y auditoría
+- [x] Tarea 7 — Reportes centrales, gastos y auditoría
 - [ ] Tarea 8 — Shell PWA, service worker y navegación
 - [ ] Tarea 9 — Base local, catálogo y sesión offline
 - [ ] Tarea 10 — Venta offline con carrito y pago
@@ -40,7 +40,8 @@
 - Tarea 4: catalogo con version, seed del menu de Karbon (9 categorias, 75 productos) y endpoints admin con validacion.
 - Tarea 5: venta con precios congelados de la caja, pago unico, pedido 1:1, turno abierto por dispositivo y devolucion completa.
 - Tarea 6: `POST /api/sync/operations` con `APPLIED|DUPLICATE|RETRY|REJECTED`, orden por `seq` y `payload_hash` para detectar cambios.
-- Siguiente paso concreto: iniciar la Tarea 7 (reportes centrales, gastos y auditoria).
+- Tarea 7: resumen de ventas, devoluciones, medios de pago, utilidad, gastos y auditoría; endpoints de reportes, gastos y auditoría con aislamiento por tenant y sede.
+- Siguiente paso concreto: iniciar la Tarea 8 (shell PWA, service worker y navegación).
 
 ## Decisiones pendientes
 
