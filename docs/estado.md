@@ -1,8 +1,8 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 10 completada (venta offline con carrito y pago).
-**Tarea en curso:** ninguna; Tarea 11 (motor de sincronización) lista para iniciar.
+**Fase:** Tarea 11 completada (motor de sincronización).
+**Tarea en curso:** ninguna; Tarea 12 (cierre de turno y reportes locales) lista para iniciar.
 **Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
@@ -19,7 +19,7 @@
 - [x] Tarea 8 — Shell PWA, service worker y navegación
 - [x] Tarea 9 — Base local, catálogo y sesión offline
 - [x] Tarea 10 — Venta offline con carrito y pago
-- [ ] Tarea 11 — Motor de sincronización
+- [x] Tarea 11 — Motor de sincronización
 - [ ] Tarea 12 — Cierre de turno, reportes locales y CSV
 - [ ] Tarea 13 — Devoluciones, gastos y administración
 - [ ] Tarea 14 — Recuperación: exportar y restaurar pendientes
@@ -45,7 +45,8 @@
 - Comandos frontend: `cd frontend && npm run test`, `npm run build`, `npx playwright test e2e/shell.spec.ts`.
 - Tarea 9: Dexie con stores de catálogo, ventas, turnos, movimientos, devoluciones, operaciones, meta y usuarios; `syncCatalog` idempotente por versión; PIN PBKDF2 y sesión offline de 7 días con pantalla `/lock`.
 - Tarea 10: carrito offline con catálogo local, tipos mostrador/domicilio/mesa, pago único, modificadores por grupo y venta + operación `LOCAL_PENDING` en una sola transacción Dexie.
-- Siguiente paso concreto: iniciar la Tarea 11 (motor de sincronización).
+- Tarea 11: `pushPending` por lotes de 50 en orden de `seq`, backoff exponencial, disparadores online/visibilidad/30 s y estado visible `Pendientes | Sincronizando | Error | Al día | Sin conexión`.
+- Siguiente paso concreto: iniciar la Tarea 12 (cierre de turno y reportes locales).
 
 ## Decisiones pendientes
 

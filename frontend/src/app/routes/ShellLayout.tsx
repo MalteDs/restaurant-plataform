@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import type { Role } from '../providers/AuthProvider'
 import { useAuth } from '../providers/AuthProvider'
 import { Button } from '../../shared/ui'
+import SyncStatus from '../../modules/sync/SyncStatus'
 
 interface NavItem {
   to: string
@@ -50,6 +51,7 @@ export function ShellLayout({ children }: { children?: ReactNode }) {
               <NavItemLink key={item.to} item={item} />
             ))}
           </nav>
+          <SyncStatus />
           <span className="text-sm text-gray-500">{user?.username}</span>
           <Button variant="ghost" onClick={() => { lock(); navigate('/lock') }}>
             Bloquear
