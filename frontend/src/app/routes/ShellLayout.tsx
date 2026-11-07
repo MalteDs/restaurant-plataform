@@ -51,7 +51,7 @@ export function ShellLayout({ children }: { children?: ReactNode }) {
             ))}
           </nav>
           <span className="text-sm text-gray-500">{user?.username}</span>
-          <Button variant="ghost" onClick={() => { lock(); navigate('/login') }}>
+          <Button variant="ghost" onClick={() => { lock(); navigate('/lock') }}>
             Bloquear
           </Button>
           <Button variant="secondary" onClick={() => { logout(); navigate('/login') }}>

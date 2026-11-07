@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminScreen from './routes/AdminScreen'
 import CashScreen from './routes/CashScreen'
+import LockScreen from './routes/LockScreen'
 import LoginScreen from './routes/LoginScreen'
 import OrdersScreen from './routes/OrdersScreen'
 import ReportsScreen from './routes/ReportsScreen'
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginScreen />} />
+      <Route path="/lock" element={<LockScreen />} />
       <Route element={<RequireAuth />}>
         <Route element={<ShellLayout />}>
           <Route path="/sale" element={<SaleScreen />} />

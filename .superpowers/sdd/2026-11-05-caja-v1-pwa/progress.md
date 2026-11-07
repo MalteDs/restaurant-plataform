@@ -2,3 +2,5 @@ Task 7: RED/GREEN con `ReportsIT` 4/4 y suite completa 41 pruebas, 0 fallos. Res
 Task 7: Ruling: `averageTicketPesos = netSalesPesos / orders` (ticket promedio sobre ventas netas) — si es incorrecto, se cambia a ventas brutas.
 Task 8: RED confirmado (`App.test.tsx` y `client.test.ts` sin modulos); GREEN `npx vitest run` 3/3, `npm run build` con PWA 11 entradas precacheadas y `npx playwright test e2e/shell.spec.ts` 1/1 con `context.setOffline(true)` y recarga desde cache.
 Task 8: Ruling: `vite preview` se levanta con `--host 127.0.0.1` porque por defecto escucha en `::1` y Playwright no lo alcanza — si es incorrecto, el e2e falla por red, no por la app.
+Task 9: RED confirmado (modulos Dexie/PIN/sesion ausentes); GREEN `npx vitest run` 8/8 y `npm run build`; `npx playwright test e2e/shell.spec.ts` 1/1. Dexie con 12 stores, catalogo por version, PBKDF2 100k iteraciones, sesion offline de 7 dias y pantalla `/lock`.
+Task 9: Ruling: el PIN se pide en el login (4-6 digitos) y la sesion cacheada arranca bloqueada; sin PIN no hay desbloqueo offline — si es incorrecto, el PIN se configura en una pantalla aparte.

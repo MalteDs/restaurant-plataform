@@ -1,8 +1,8 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 8 completada (shell PWA, service worker y navegación).
-**Tarea en curso:** ninguna; Tarea 9 (base local, catálogo y sesión offline) lista para iniciar.
+**Fase:** Tarea 9 completada (Dexie, catálogo local y PIN offline).
+**Tarea en curso:** ninguna; Tarea 10 (venta offline) lista para iniciar.
 **Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
@@ -17,7 +17,7 @@
 - [x] Tarea 6 — Sync API idempotente
 - [x] Tarea 7 — Reportes centrales, gastos y auditoría
 - [x] Tarea 8 — Shell PWA, service worker y navegación
-- [ ] Tarea 9 — Base local, catálogo y sesión offline
+- [x] Tarea 9 — Base local, catálogo y sesión offline
 - [ ] Tarea 10 — Venta offline con carrito y pago
 - [ ] Tarea 11 — Motor de sincronización
 - [ ] Tarea 12 — Cierre de turno, reportes locales y CSV
@@ -43,7 +43,8 @@
 - Tarea 7: resumen de ventas, devoluciones, medios de pago, utilidad, gastos y auditoría; endpoints de reportes, gastos y auditoría con aislamiento por tenant y sede.
 - Tarea 8: frontend React + Vite + Tailwind, rutas `/login`, `/sale`, `/orders`, `/cash`, `/reports`, `/admin`, navegación por rol, `api.request` y service worker con precache (no intercepta `/api/**`).
 - Comandos frontend: `cd frontend && npm run test`, `npm run build`, `npx playwright test e2e/shell.spec.ts`.
-- Siguiente paso concreto: iniciar la Tarea 9 (Dexie, catálogo local y PIN offline).
+- Tarea 9: Dexie con stores de catálogo, ventas, turnos, movimientos, devoluciones, operaciones, meta y usuarios; `syncCatalog` idempotente por versión; PIN PBKDF2 y sesión offline de 7 días con pantalla `/lock`.
+- Siguiente paso concreto: iniciar la Tarea 10 (venta offline con carrito y pago).
 
 ## Decisiones pendientes
 

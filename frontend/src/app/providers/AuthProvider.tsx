@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { request } from '../../infrastructure/api/client'
+import { db } from '../../infrastructure/database/schema'
+import { activeUserId, saveOfflineSession, unlockOfflineSession } from '../../modules/auth/session'
+import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
 
 export type Role = 'CASHIER' | 'MANAGER' | 'ADMIN'
 
@@ -15,10 +18,10 @@ export interface User {
 interface AuthContextValue {
   user: User | null
   locked: boolean
-  login: (username: string, password: string, locationCode?: string) => Promise<void>
+  login: (username: string, password: string, locationCode?: string, pin?: string) => Promise<void>
   logout: () => void
   lock: () => void
-  unlock: (pin: string) => boolean
+  unlock: (pin: string) => Promise<boolean>
 }
 
 interface LoginResponse {
@@ -47,19 +50,28 @@ function readUser(): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(readUser)
-  const [locked, setLocked] = useState(false)
+  // A cached session always starts locked: the PIN is required to sell offline.
+  const [locked, setLocked] = useState(() => readUser() !== null)
 
-  const login = useCallback(async (username: string, password: string, locationCode?: string) => {
-    const session = await request<LoginResponse>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password, locationCode })
-    })
-    localStorage.setItem(USER_KEY, JSON.stringify(session.user))
-    localStorage.setItem(ACCESS_KEY, session.accessToken)
-    localStorage.setItem(REFRESH_KEY, session.refreshToken)
-    setUser(session.user)
-    setLocked(false)
-  }, [])
+  const login = useCallback(
+    async (username: string, password: string, locationCode?: string, pin?: string) => {
+      const session = await request<LoginResponse>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, locationCode })
+      })
+      localStorage.setItem(USER_KEY, JSON.stringify(session.user))
+      localStorage.setItem(ACCESS_KEY, session.accessToken)
+      localStorage.setItem(REFRESH_KEY, session.refreshToken)
+      setUser(session.user)
+      setLocked(false)
+      if (pin) {
+        await saveOfflineSession(db, session.user, pin)
+      }
+      // The local catalog is refreshed in the background; failure keeps the previous one.
+      void syncCatalog(db).catch(() => undefined)
+    },
+    []
+  )
 
   const logout = useCallback(() => {
     localStorage.removeItem(USER_KEY)
@@ -70,8 +82,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const lock = useCallback(() => setLocked(true), [])
-  // The offline PIN arrives in Task 9; until then unlocking is only manual logout.
-  const unlock = useCallback(() => false, [])
+
+  const unlock = useCallback(
+    async (pin: string) => {
+      const userId = user?.id ?? (await activeUserId(db))
+      if (!userId) {
+        return false
+      }
+      const session = await unlockOfflineSession(db, userId, pin)
+      if (!session) {
+        return false
+      }
+      const restored = session.user as User
+      localStorage.setItem(USER_KEY, JSON.stringify(restored))
+      setUser(restored)
+      setLocked(false)
+      return true
+    },
+    [user]
+  )
 
   const value = useMemo(
     () => ({ user, locked, login, logout, lock, unlock }),
