@@ -1,8 +1,8 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 11 completada (motor de sincronización).
-**Tarea en curso:** ninguna; Tarea 12 (cierre de turno y reportes locales) lista para iniciar.
+**Fase:** Tarea 12 completada (cierre de turno y reportes locales).
+**Tarea en curso:** ninguna; Tarea 13 (devoluciones, gastos y administración) lista para iniciar.
 **Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
@@ -20,7 +20,7 @@
 - [x] Tarea 9 — Base local, catálogo y sesión offline
 - [x] Tarea 10 — Venta offline con carrito y pago
 - [x] Tarea 11 — Motor de sincronización
-- [ ] Tarea 12 — Cierre de turno, reportes locales y CSV
+- [x] Tarea 12 — Cierre de turno, reportes locales y CSV
 - [ ] Tarea 13 — Devoluciones, gastos y administración
 - [ ] Tarea 14 — Recuperación: exportar y restaurar pendientes
 - [ ] Tarea 15 — E2E offline, despliegue y documentación
@@ -46,7 +46,8 @@
 - Tarea 9: Dexie con stores de catálogo, ventas, turnos, movimientos, devoluciones, operaciones, meta y usuarios; `syncCatalog` idempotente por versión; PIN PBKDF2 y sesión offline de 7 días con pantalla `/lock`.
 - Tarea 10: carrito offline con catálogo local, tipos mostrador/domicilio/mesa, pago único, modificadores por grupo y venta + operación `LOCAL_PENDING` en una sola transacción Dexie.
 - Tarea 11: `pushPending` por lotes de 50 en orden de `seq`, backoff exponencial, disparadores online/visibilidad/30 s y estado visible `Pendientes | Sincronizando | Error | Al día | Sin conexión`.
-- Siguiente paso concreto: iniciar la Tarea 12 (cierre de turno y reportes locales).
+- Tarea 12: apertura y cierre de turno offline con arqueo, cola `CLOSE_SHIFT`, resumen local con desglose por categoría/día/hora/producto y exportación CSV con `;` y UTF-8.
+- Siguiente paso concreto: iniciar la Tarea 13 (devoluciones offline, gastos y pantallas de administración).
 
 ## Decisiones pendientes
 

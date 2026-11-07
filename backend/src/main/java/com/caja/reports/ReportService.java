@@ -1,5 +1,6 @@
 package com.caja.reports;
 
+import com.caja.reports.Summary.CategoryRow;
 import com.caja.reports.Summary.DayRow;
 import com.caja.reports.Summary.HourRow;
 import com.caja.reports.Summary.ProductRow;
@@ -85,9 +86,21 @@ public class ReportService {
         """, (rs, rowNum) -> new ProductRow(rs.getString("product_name"), rs.getLong("quantity"),
         rs.getLong("total")), tenantId, locationId, from, to);
 
+    var byCategory = jdbc.query("""
+        select si.category_name, coalesce(sum(si.quantity), 0) as quantity,
+               coalesce(sum(si.line_total_pesos), 0) as total
+        from sale_items si
+        join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                     and s.location_id = si.location_id
+        where s.tenant_id = ? and s.location_id = ? and s.operational_date between ? and ?
+        group by si.category_name
+        order by total desc
+        """, (rs, rowNum) -> new CategoryRow(rs.getString("category_name"),
+        rs.getLong("quantity"), rs.getLong("total")), tenantId, locationId, from, to);
+
     return new Summary(salesPesos, refundsPesos, netSalesPesos, cashPesos, cardPesos, brebPesos,
-        orders, refundCount, averageTicket, costPesos, expensesPesos, profit, byDay, byHour,
-        byProduct);
+        orders, refundCount, averageTicket, costPesos, expensesPesos, profit, byCategory,
+        byDay, byHour, byProduct);
   }
 
   private long methodTotal(UUID tenantId, UUID locationId, LocalDate from, LocalDate to,

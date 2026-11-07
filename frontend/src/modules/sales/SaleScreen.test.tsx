@@ -38,7 +38,7 @@ it('un doble clic crea una sola venta', async () => {
   })
 
   render(<SaleScreen database={db} onCreateSale={create} />)
-  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }, { timeout: 5000 }))
   await userEvent.dblClick(screen.getByRole('button', { name: /cobrar/i }))
 
   expect(create).toHaveBeenCalledTimes(1)

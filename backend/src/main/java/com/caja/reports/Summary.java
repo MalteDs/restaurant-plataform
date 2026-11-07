@@ -6,8 +6,8 @@ import java.util.List;
 public record Summary(long salesPesos, long refundsPesos, long netSalesPesos, long cashPesos,
                       long cardPesos, long brebPesos, int orders, int refundCount,
                       long averageTicketPesos, long costPesos, long expensesPesos,
-                      long operatingProfitPesos, List<DayRow> byDay, List<HourRow> byHour,
-                      List<ProductRow> byProduct) {
+                      long operatingProfitPesos, List<CategoryRow> byCategory, List<DayRow> byDay,
+                      List<HourRow> byHour, List<ProductRow> byProduct) {
   public record DayRow(LocalDate date, long salesPesos) {
   }
 
@@ -15,5 +15,8 @@ public record Summary(long salesPesos, long refundsPesos, long netSalesPesos, lo
   }
 
   public record ProductRow(String name, long quantity, long salesPesos) {
+  }
+
+  public record CategoryRow(String name, long quantity, long salesPesos) {
   }
 }

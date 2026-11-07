@@ -175,6 +175,9 @@ export class CajaDb extends Dexie {
       meta: 'key',
       users: 'id, username'
     })
+    this.version(2).stores({
+      operations: 'operationId, seq, status, entityId, type'
+    })
   }
 }
 

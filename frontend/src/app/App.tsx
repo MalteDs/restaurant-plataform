@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminScreen from './routes/AdminScreen'
-import CashScreen from './routes/CashScreen'
+import CashScreen from '../modules/shifts/CashScreen'
 import LockScreen from './routes/LockScreen'
 import LoginScreen from './routes/LoginScreen'
 import OrdersScreen from './routes/OrdersScreen'
