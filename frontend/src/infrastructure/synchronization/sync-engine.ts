@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { OPERATION_QUEUED } from './notify'
 import { db, type CajaDb } from '../../infrastructure/database/schema'
 import { request } from '../api/client'
 
@@ -178,6 +179,7 @@ export function startSyncEngine(
 
   void run()
   window.addEventListener('online', onOnline)
+  window.addEventListener(OPERATION_QUEUED, onOnline)
   document.addEventListener('visibilitychange', onVisible)
   const timer = window.setInterval(() => void run(), 30_000)
 
@@ -185,6 +187,7 @@ export function startSyncEngine(
     stopped = true
     window.clearInterval(timer)
     window.removeEventListener('online', onOnline)
+    window.removeEventListener(OPERATION_QUEUED, onOnline)
     document.removeEventListener('visibilitychange', onVisible)
   }
 }

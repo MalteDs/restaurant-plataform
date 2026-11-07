@@ -1,3 +1,4 @@
+import { notifyOperationQueued } from '../../../infrastructure/synchronization/notify'
 import { db, type CajaDb, type ComponentRow, type ModifierRow } from '../../../infrastructure/database/schema'
 import { activeUserId } from '../../../modules/auth/session'
 
@@ -79,7 +80,7 @@ export async function createSale(
   const totalPesos = input.items.reduce((sum, item) => sum + lineTotal(item), 0)
     + (input.deliveryFeePesos ?? 0)
 
-  return database.transaction(
+  const created = await database.transaction(
     'rw',
     [database.sales, database.saleItems, database.payments, database.operations, database.meta],
     async () => {
@@ -167,4 +168,6 @@ export async function createSale(
       return { saleId, displayCode, totalPesos }
     }
   )
+  notifyOperationQueued()
+  return created
 }

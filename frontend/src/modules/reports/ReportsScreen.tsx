@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { db } from '../../infrastructure/database/schema'
+import { request } from '../../infrastructure/api/client'
 import { exportSummaryCsv, localSummary, type LocalSummary } from '../../application/use-cases/reports/local-summary'
 import ExpensesScreen from '../expenses/ExpensesScreen'
 import { Button, Card, PageHeader } from '../../shared/ui'
@@ -10,7 +11,19 @@ export default function ReportsScreen() {
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => {
-    void localSummary(db, today, today).then(setSummary)
+    async function load() {
+      if (navigator.onLine) {
+        try {
+          // Online reports come from the server so expenses and costs match exactly.
+          setSummary(await request<LocalSummary>(`/api/reports/summary?from=${today}&to=${today}`))
+          return
+        } catch {
+          // Fall back to the local summary when the server is unreachable.
+        }
+      }
+      setSummary(await localSummary(db, today, today))
+    }
+    void load()
   }, [today])
 
   function onExport() {

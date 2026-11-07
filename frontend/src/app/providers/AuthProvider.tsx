@@ -67,8 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (pin) {
         await saveOfflineSession(db, session.user, pin)
       }
-      // The local catalog is refreshed in the background; failure keeps the previous one.
-      void syncCatalog(db).catch(() => undefined)
+      // Login is online; wait for the local catalog so the sale screen has products.
+      try {
+        await syncCatalog(db)
+      } catch {
+        // Keep the previous catalog if the snapshot cannot be downloaded.
+      }
     },
     []
   )

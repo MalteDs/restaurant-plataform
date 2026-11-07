@@ -126,6 +126,26 @@ class SaleApplicationIT {
         Integer.class, ctx.tenantId()));
   }
 
+  @Test void refundInANewShiftDoesNotChangeTheClosedShift() {
+    var ctx = fixture();
+    var product = insertProduct(ctx, 16500);
+    var sale = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH"));
+    shifts.close(new com.caja.shifts.CloseShiftCommand(ctx.tenantId(), ctx.locationId(),
+        ctx.shiftId(), 66500));
+
+    var secondShift = UUID.randomUUID();
+    jdbc.update("insert into shifts(id, tenant_id, location_id, device_id, user_id, "
+        + "opening_cash_pesos, operational_date) values (?, ?, ?, ?, ?, 0, current_date)",
+        secondShift, ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId());
+    shifts.applyRefund(new com.caja.shifts.RefundCommand(ctx.tenantId(), ctx.locationId(),
+        ctx.deviceId(), ctx.userId(), secondShift, sale.id(), "CASH", "turno siguiente",
+        Instant.now()));
+
+    // The refund belongs to the second shift, so the closed shift keeps its arqueo.
+    assertEquals(66500, shifts.expectedCash(ctx.shiftId()));
+    assertEquals(-16500, shifts.expectedCash(secondShift));
+  }
+
   private record Ctx(UUID tenantId, UUID locationId, UUID userId, UUID deviceId, UUID shiftId,
                      AtomicInteger seq) {
     String nextDisplayCode() {

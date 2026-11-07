@@ -81,6 +81,17 @@ class SyncIT {
         UUID.nameUUIDFromBytes("op-4".getBytes(StandardCharsets.UTF_8))));
   }
 
+  @Test void twoHundredRetriesDoNotDuplicateTheSale() throws Exception {
+    var ctx = fixture();
+    var operation = saleOperation(ctx, "op-200", 1, 16500, Instant.now());
+
+    for (int i = 0; i < 200; i++) {
+      push(ctx, List.of(operation));
+    }
+
+    assertEquals(1, countSales(ctx));
+  }
+
   @Test void withoutDeviceTokenTheSyncIsRejected() throws Exception {
     mvc.perform(post("/api/sync/operations").contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("operations", List.of()))))

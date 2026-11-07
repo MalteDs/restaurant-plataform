@@ -1,3 +1,4 @@
+import { notifyOperationQueued } from '../../../infrastructure/synchronization/notify'
 import type { CajaDb } from '../../../infrastructure/database/schema'
 import { activeUserId } from '../../../modules/auth/session'
 
@@ -54,5 +55,6 @@ export async function openShift(
     })
   })
 
+  notifyOperationQueued()
   return { shiftId, openingCashPesos }
 }

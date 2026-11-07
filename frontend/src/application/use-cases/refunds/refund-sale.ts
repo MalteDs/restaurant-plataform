@@ -1,3 +1,4 @@
+import { notifyOperationQueued } from '../../../infrastructure/synchronization/notify'
 import { db, type CajaDb } from '../../../infrastructure/database/schema'
 import { activeUserId } from '../../../modules/auth/session'
 
@@ -76,5 +77,6 @@ export async function refundSale(
       })
     })
 
+  notifyOperationQueued()
   return { refundId, amountPesos: sale.totalPesos }
 }

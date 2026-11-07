@@ -42,6 +42,13 @@ export default defineConfig({
       '/actuator': 'http://localhost:8080'
     }
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': 'http://localhost:8080',
+      '/actuator': 'http://localhost:8080'
+    }
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],

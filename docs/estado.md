@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-06
-**Fase:** Tarea 14 completada (exportar y restaurar pendientes).
-**Tarea en curso:** ninguna; Tarea 15 (E2E, despliegue y documentación) lista para iniciar.
-**Último commit de implementación:** `cb628fe` (`feat: central reports and audit`).
+**Fase:** v1 completa: Tareas 1–15 implementadas.
+**Tarea en curso:** ninguna.
+**Último commit de implementación:** ver `git log -1` (`feat: offline e2e, cloud deployment and recovery docs`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
 **Bloqueos:** ninguno.
 
@@ -23,7 +23,7 @@
 - [x] Tarea 12 — Cierre de turno, reportes locales y CSV
 - [x] Tarea 13 — Devoluciones, gastos y administración
 - [x] Tarea 14 — Recuperación: exportar y restaurar pendientes
-- [ ] Tarea 15 — E2E offline, despliegue y documentación
+- [x] Tarea 15 — E2E offline, despliegue y documentación
 
 ## Notas de la sesión
 
@@ -49,7 +49,9 @@
 - Tarea 12: apertura y cierre de turno offline con arqueo, cola `CLOSE_SHIFT`, resumen local con desglose por categoría/día/hora/producto y exportación CSV con `;` y UTF-8.
 - Tarea 13: devoluciones offline con motivo, gastos solo online para MANAGER/ADMIN, pantallas de catálogo, usuarios, dispositivos y sede; endpoints admin de usuarios, dispositivos y sede en el backend.
 - Tarea 14: exportación JSONL de operaciones y ventas pendientes, restauración idempotente por `operationId`, pantalla `/recovery` con doble confirmación y carpeta de respaldo (File System Access con fallback a descarga).
-- Siguiente paso concreto: iniciar la Tarea 15 (E2E offline, despliegue y documentación).
+- Verificación automatizada: backend 45 pruebas, frontend 23 pruebas, E2E 3 escenarios (shell offline, venta/cierre/sync, recuperación en perfil limpio), respaldo/restauración con 75 productos.
+- Pendiente manual (no bloqueante): 500 ventas offline en el PC real Windows 10 de 2 GB, midiendo memoria de Edge.
+- Pendiente de decisión: la utilidad local offline no incluye gastos (no se guardan sin conexión); con red, Reportes usa el resumen del servidor.
 
 ## Decisiones pendientes
 
