@@ -49,7 +49,7 @@
 - Tarea 12: apertura y cierre de turno offline con arqueo, cola `CLOSE_SHIFT`, resumen local con desglose por categoría/día/hora/producto y exportación CSV con `;` y UTF-8.
 - Tarea 13: devoluciones offline con motivo, gastos solo online para MANAGER/ADMIN, pantallas de catálogo, usuarios, dispositivos y sede; endpoints admin de usuarios, dispositivos y sede en el backend.
 - Tarea 14: exportación JSONL de operaciones y ventas pendientes, restauración idempotente por `operationId`, pantalla `/recovery` con doble confirmación y carpeta de respaldo (File System Access con fallback a descarga).
-- Verificación automatizada: backend 46 pruebas, frontend 23 pruebas, E2E 3 escenarios (shell offline, venta/cierre/sync, recuperación en perfil limpio), respaldo/restauración con 75 productos.
+- Verificación automatizada: backend 47 pruebas, frontend 23 pruebas, E2E 3 escenarios (shell offline, venta/cierre/sync, recuperación en perfil limpio), respaldo/restauración con 75 productos.
 - Revisión final aplicada: rechazos de sync persistentes, prefijo por dispositivo, recuperación con token/meta/turnos, costo por cantidad y sin devueltas, devolución atómica, refresh de token, catálogo periódico y fechas operativas del cliente.
 - Pendiente manual (no bloqueante): 500 ventas offline en el PC real Windows 10 de 2 GB, midiendo memoria de Edge.
 - Pendiente de decisión: la utilidad local offline no incluye gastos (no se guardan sin conexión); con red, Reportes usa el resumen del servidor.
