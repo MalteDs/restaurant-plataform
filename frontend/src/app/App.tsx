@@ -5,7 +5,7 @@ import LockScreen from './routes/LockScreen'
 import LoginScreen from './routes/LoginScreen'
 import OrdersScreen from './routes/OrdersScreen'
 import ReportsScreen from './routes/ReportsScreen'
-import SaleScreen from './routes/SaleScreen'
+import SaleScreen from '../modules/sales/SaleScreen'
 import { RequireAuth } from './routes/RequireAuth'
 import { ShellLayout } from './routes/ShellLayout'
 
