@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 022-price-override
+      author: caja
+      changes:
+        - sql:
+            sql: |
+              alter table sale_items
+                add column catalog_unit_price_pesos bigint,
+                add column override_reason varchar(200),
+                add column override_user_id uuid;
+              alter table sale_items
+                add constraint sale_items_catalog_price_ck
+                  check (catalog_unit_price_pesos is null or catalog_unit_price_pesos >= 0);
+              alter table sale_items
+                add constraint sale_items_override_user_fk
+                  foreign key (override_user_id, tenant_id, location_id)
+                  references users(id, tenant_id, location_id);
+              alter table sale_items
+                add constraint sale_items_override_ck check (
+                  (override_reason is null and override_user_id is null)
+                  or (override_reason is not null and override_user_id is not null
+                      and length(trim(override_reason)) >= 5)
+                );

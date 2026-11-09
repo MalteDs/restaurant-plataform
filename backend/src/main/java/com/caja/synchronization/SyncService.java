@@ -114,6 +114,21 @@ public class SyncService {
     if (open == null || open == 0) {
       throw new IllegalStateException("No hay turno abierto para este dispositivo");
     }
+    if ("CREATE_SALE".equals(operation.type())) {
+      var overrides = new ArrayList<SaleApplicationService.PriceOverride>();
+      for (Map<String, Object> item : (List<Map<String, Object>>) payload.getOrDefault("items",
+          List.of())) {
+        var unitPrice = ((Number) item.get("unitPricePesos")).longValue();
+        var catalogPrice = item.get("catalogUnitPricePesos") == null ? unitPrice
+            : ((Number) item.get("catalogUnitPricePesos")).longValue();
+        if (unitPrice != catalogPrice) {
+          overrides.add(new SaleApplicationService.PriceOverride(unitPrice, catalogPrice,
+              (String) item.get("overrideReason")));
+        }
+      }
+      sales.validatePriceOverrides(batch.tenantId(), batch.locationId(), operation.userId(),
+          overrides);
+    }
     if ("REFUND_SALE".equals(operation.type())) {
       var refunded = jdbc.queryForObject("select count(*) from refunds where sale_id = ?",
           Integer.class, uuid(payload.get("saleId")));
@@ -191,12 +206,15 @@ public class SyncService {
         components.add(new CreateSaleCommand.ComponentCommand(uuid(component.get("productId")),
             (String) component.get("name"), ((Number) component.get("quantity")).intValue()));
       }
+      var unitPrice = ((Number) item.get("unitPricePesos")).longValue();
+      var catalogPrice = item.get("catalogUnitPricePesos") == null ? unitPrice
+          : ((Number) item.get("catalogUnitPricePesos")).longValue();
       items.add(new CreateSaleCommand.ItemCommand(uuid(item.get("productId")),
           (String) item.get("productName"), (String) item.get("categoryName"),
-          ((Number) item.get("quantity")).intValue(),
-          ((Number) item.get("unitPricePesos")).longValue(),
+          ((Number) item.get("quantity")).intValue(), unitPrice,
           item.get("costPesos") == null ? null : ((Number) item.get("costPesos")).longValue(),
-          (String) item.get("note"), modifiers, components));
+          (String) item.get("note"), modifiers, components, catalogPrice,
+          (String) item.get("overrideReason")));
     }
     return new CreateSaleCommand(operation.entityId(), batch.tenantId(), batch.locationId(),
         batch.deviceId(), operation.userId(), uuid(payload.get("shiftId")),

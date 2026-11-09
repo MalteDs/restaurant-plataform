@@ -35,7 +35,8 @@ public record CreateSaleCommand(UUID saleId, UUID tenantId, UUID locationId, UUI
 
   public record ItemCommand(UUID productId, String productName, String categoryName, int quantity,
                             long unitPricePesos, Long costPesos, String note,
-                            List<ModifierCommand> modifiers, List<ComponentCommand> components) {
+                            List<ModifierCommand> modifiers, List<ComponentCommand> components,
+                            long catalogUnitPricePesos, String overrideReason) {
   }
 
   public record ModifierCommand(UUID modifierId, String modifierName, long additionalPricePesos) {

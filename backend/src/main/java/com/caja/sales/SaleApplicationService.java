@@ -1,10 +1,12 @@
 package com.caja.sales;
 
+import com.caja.audit.AuditService;
 import com.caja.orders.OrderFactory;
 import com.caja.payments.PaymentService;
 import java.sql.Timestamp;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -17,11 +19,14 @@ public class SaleApplicationService {
   private final JdbcTemplate jdbc;
   private final PaymentService payments;
   private final OrderFactory orders;
+  private final AuditService audit;
 
-  public SaleApplicationService(JdbcTemplate jdbc, PaymentService payments, OrderFactory orders) {
+  public SaleApplicationService(JdbcTemplate jdbc, PaymentService payments, OrderFactory orders,
+                                AuditService audit) {
     this.jdbc = jdbc;
     this.payments = payments;
     this.orders = orders;
+    this.audit = audit;
   }
 
   @Transactional
@@ -32,6 +37,7 @@ public class SaleApplicationService {
     }
     requireOpenShift(command);
     var total = totalOf(command);
+    validateOverrides(command);
     var saleId = command.saleId();
     jdbc.update("""
         insert into sales(id, tenant_id, location_id, device_id, user_id, shift_id, type,
@@ -98,14 +104,17 @@ public class SaleApplicationService {
   private void insertItem(CreateSaleCommand command, UUID saleId,
                            CreateSaleCommand.ItemCommand item) {
     var itemId = UUID.randomUUID();
+    var override = item.unitPricePesos() != item.catalogUnitPricePesos();
     jdbc.update("""
         insert into sale_items(id, tenant_id, location_id, sale_id, product_id, product_name,
                                category_name, quantity, unit_price_pesos, cost_pesos, note,
-                               line_total_pesos)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               line_total_pesos, catalog_unit_price_pesos, override_reason,
+                               override_user_id)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, itemId, command.tenantId(), command.locationId(), saleId, item.productId(),
         item.productName(), item.categoryName(), item.quantity(), item.unitPricePesos(),
-        item.costPesos(), item.note(), lineTotal(item));
+        item.costPesos(), item.note(), lineTotal(item), item.catalogUnitPricePesos(),
+        override ? item.overrideReason() : null, override ? command.userId() : null);
 
     for (var modifier : item.modifiers()) {
       jdbc.update("""
@@ -123,6 +132,45 @@ public class SaleApplicationService {
           """, itemId, component.productId(), component.name(), component.quantity(),
           command.tenantId(), command.locationId());
     }
+    if (override) {
+      audit.record(command.tenantId(), command.locationId(), command.userId(), "PRICE_OVERRIDDEN",
+          "sale_item", itemId, Map.of("catalogPricePesos", item.catalogUnitPricePesos(),
+              "appliedPricePesos", item.unitPricePesos(), "reason", item.overrideReason()));
+    }
+  }
+
+  private void validateOverrides(CreateSaleCommand command) {
+    var overrides = command.items().stream()
+        .filter(item -> item.unitPricePesos() != item.catalogUnitPricePesos())
+        .map(item -> new PriceOverride(item.unitPricePesos(), item.catalogUnitPricePesos(),
+            item.overrideReason()))
+        .toList();
+    validatePriceOverrides(command.tenantId(), command.locationId(), command.userId(), overrides);
+  }
+
+  public void validatePriceOverrides(UUID tenantId, UUID locationId, UUID userId,
+                                     List<PriceOverride> overrides) {
+    if (overrides == null || overrides.isEmpty()) {
+      return;
+    }
+    var role = jdbc.query("""
+        select role from users
+        where id = ? and tenant_id = ? and location_id = ?
+        """, (rs, rowNum) -> rs.getString("role"), userId, tenantId, locationId).stream()
+        .findFirst().orElse(null);
+    if (!"MANAGER".equals(role) && !"ADMIN".equals(role)) {
+      throw new IllegalStateException("Solo encargado o admin puede cambiar precios");
+    }
+    for (var override : overrides) {
+      var reason = override.reason();
+      if (reason == null || reason.trim().length() < 5 || reason.length() > 200) {
+        throw new IllegalStateException(
+            "El cambio de precio necesita un motivo de al menos 5 caracteres");
+      }
+    }
+  }
+
+  public record PriceOverride(long unitPricePesos, long catalogUnitPricePesos, String reason) {
   }
 
   public List<AppliedSale> recent(UUID tenantId, UUID locationId, int limit) {

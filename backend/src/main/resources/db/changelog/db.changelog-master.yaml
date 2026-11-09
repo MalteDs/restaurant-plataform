@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/020-e2e-admin.yaml
   - include:
       file: db/changelog/021-catalog-sale-days.yaml
+  - include:
+      file: db/changelog/022-price-override.yaml
