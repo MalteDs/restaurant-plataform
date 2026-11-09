@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../../app/providers/AuthProvider'
 import { request } from '../../infrastructure/api/client'
+import { bogotaDate } from '../../shared/dates'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 interface Expense {
@@ -17,27 +18,44 @@ interface ExpenseList {
   totalPesos: number
 }
 
+interface ExpenseCategory {
+  id: string
+  name: string
+  active: boolean
+}
+
 export default function ExpensesScreen() {
   const { user } = useAuth()
   const online = navigator.onLine
   const canManage = user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [total, setTotal] = useState(0)
-  const [category, setCategory] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [error, setError] = useState('')
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bogotaDate()
 
   async function refresh() {
-    const data = await request<ExpenseList>(`/api/expenses?from=${today}&to=${today}`)
+    if (!navigator.onLine) {
+      return
+    }
+    const [data, available] = await Promise.all([
+      request<ExpenseList>(`/api/expenses?from=${today}&to=${today}`),
+      request<ExpenseCategory[]>('/api/expenses/categories')
+    ])
     setExpenses(data.expenses)
     setTotal(data.totalPesos)
+    setCategories(available.filter((category) => category.active))
+    if (!available.some((category) => category.id === categoryId && category.active)) {
+      setCategoryId('')
+    }
   }
 
   useEffect(() => {
-    if (online && canManage) {
+    if (online && canManage && navigator.onLine) {
       void refresh().catch(() => setError('No se pudieron cargar los gastos'))
     }
   }, [online, canManage])
@@ -49,13 +67,13 @@ export default function ExpensesScreen() {
       await request('/api/expenses', {
         method: 'POST',
         body: JSON.stringify({
-          category,
+          expenseCategoryId: categoryId,
           description,
           amountPesos: Number(amount),
           expenseDate: today
         })
       })
-      setCategory('')
+      setCategoryId('')
       setDescription('')
       setAmount('')
       await refresh()
@@ -114,8 +132,17 @@ export default function ExpensesScreen() {
           <form className="space-y-3" onSubmit={onSubmit}>
             <label className="block text-sm font-medium text-gray-700">
               Categoría
-              <Input className="mt-1" value={category}
-                onChange={(event) => setCategory(event.target.value)} required />
+              <select
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+                required
+              >
+                <option value="">Selecciona una categoría</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Descripción

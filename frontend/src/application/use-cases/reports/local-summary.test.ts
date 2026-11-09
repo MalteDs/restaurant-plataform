@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, expect, it } from 'vitest'
 import { openDb, type CajaDb } from '../../../infrastructure/database/schema'
-import { exportSummaryCsv, localSummary } from './local-summary'
+import { dailySummary, exportSummaryCsv, localSummary } from './local-summary'
 
 const opened: CajaDb[] = []
 
@@ -71,6 +71,7 @@ it('el resumen local calcula el neto y el desglose por categoria', async () => {
   expect(summary.costPesos).toBe(10000)
   expect(summary.byCategory).toHaveLength(2)
   expect(summary.byProduct[0].name).toBe('SENCILLA')
+  expect(summary.byExpenseCategory).toEqual([])
 })
 
 it('exporta CSV con encabezado y sin perder tildes', async () => {
@@ -87,4 +88,40 @@ it('exporta CSV con encabezado y sin perder tildes', async () => {
   expect(text).toContain('fecha;ventas;neto')
   expect(text).toContain('Categoría')
   expect(text).toContain('SENCILLA')
+})
+
+it('reporta todas las ventas locales y solo toma los gastos del servidor', async () => {
+  const db = await seed()
+
+  const summary = await dailySummary(db, '2026-11-01', async () => ({ expensesPesos: 5000 }))
+
+  expect(summary.salesPesos).toBe(51500)
+  expect(summary.orders).toBe(2)
+  expect(summary.byCategory).toHaveLength(2)
+  expect(summary.expensesPesos).toBe(5000)
+  expect(summary.operatingProfitPesos).toBe(31500)
+})
+
+it('mantiene las ventas locales si el servidor no responde', async () => {
+  const db = await seed()
+
+  const summary = await dailySummary(db, '2026-11-01', async () => {
+    throw new Error('sin red')
+  })
+
+  expect(summary.salesPesos).toBe(51500)
+  expect(summary.orders).toBe(2)
+  expect(summary.expensesPesos).toBe(0)
+  expect(summary.byExpenseCategory).toEqual([])
+})
+
+it('mezcla el desglose de gastos por categoría del servidor', async () => {
+  const db = await seed()
+
+  const summary = await dailySummary(db, '2026-11-01', async () => ({
+    expensesPesos: 5000,
+    byExpenseCategory: [{ name: 'Domicilios', amountPesos: 5000 }]
+  }))
+
+  expect(summary.byExpenseCategory).toEqual([{ name: 'Domicilios', amountPesos: 5000 }])
 })
