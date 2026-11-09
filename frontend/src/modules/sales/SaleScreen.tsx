@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductRow } from '../../infrastructure/database/schema'
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { buildProductFamilies, type ProductFamily } from './product-families'
+import { isProductSellable } from './sale-days'
 
 interface CartLine {
   key: string
@@ -24,10 +26,13 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [method, setMethod] = useState<SaleInput['method']>('CASH')
   const [picking, setPicking] = useState<ProductRow | null>(null)
+  const [pickingFamily, setPickingFamily] = useState<ProductFamily | null>(null)
   const [selected, setSelected] = useState<Record<string, ModifierRow[]>>({})
+  const [cartOpen, setCartOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [now, setNow] = useState(new Date())
   const lastCharge = useRef(0)
 
   useEffect(() => {
@@ -35,15 +40,24 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     void database.modifierGroups.toArray().then(setGroups)
   }, [database])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const grouped = useMemo(() => {
-    const byCategory = new Map<string, ProductRow[]>()
-    for (const product of products) {
-      const list = byCategory.get(product.categoryName) ?? []
-      list.push(product)
-      byCategory.set(product.categoryName, list)
+    const byCategory = new Map<string, ProductFamily[]>()
+    for (const family of buildProductFamilies(
+      products.filter((row) => isProductSellable(row, now))
+    )) {
+      const list = byCategory.get(family.categoryName) ?? []
+      list.push(family)
+      byCategory.set(family.categoryName, list)
     }
     return [...byCategory.entries()]
-  }, [products])
+  }, [products, now])
+
+  const cartUnits = cart.reduce((sum, line) => sum + line.quantity, 0)
 
   const total = cart.reduce((sum, line) => sum + lineTotal({
     productId: line.product.id,
@@ -70,6 +84,23 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     }
     setPicking(product)
     setSelected({})
+  }
+
+  function pickFamily(family: ProductFamily) {
+    if (family.variants.length === 1) {
+      pick(family.variants[0].product)
+      return
+    }
+    setPickingFamily(family)
+  }
+
+  function chooseVariant(product: ProductRow) {
+    setPickingFamily(null)
+    pick(product)
+  }
+
+  function removeLine(key: string) {
+    setCart((current) => current.filter((line) => line.key !== key))
   }
 
   function toggleModifier(group: ModifierGroupRow, modifier: ModifierRow) {
@@ -139,6 +170,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
         }))
       })
       setCart([])
+      setCartOpen(false)
       setMessage(`Venta ${created.displayCode} guardada`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo cobrar')
@@ -152,124 +184,186 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     : []
 
   return (
-    <div>
+    <div className="pb-24 lg:pb-0">
       <PageHeader title="Venta" subtitle="Precios congelados del catálogo local" />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card>
           <div className="space-y-4">
-            {grouped.map(([category, items]) => (
+            {grouped.map(([category, families]) => (
               <section key={category}>
                 <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
                   {category}
                 </h2>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {items.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => pick(product)}
-                      className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
-                    >
-                      <span className="block text-sm font-semibold text-gray-900">
-                        {product.name}
-                      </span>
-                      <span className="text-sm text-brand-600">
-                        ${product.pricePesos.toLocaleString('es-CO')}
-                      </span>
-                    </button>
-                  ))}
+                  {families.map((family) => {
+                    const price = family.variants[0]?.product.pricePesos ?? 0
+                    return (
+                      <button
+                        key={family.key}
+                        type="button"
+                        onClick={() => pickFamily(family)}
+                        className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
+                      >
+                        <span className="block text-sm font-semibold text-gray-900">
+                          {family.name}
+                        </span>
+                        <span className="text-sm text-brand-600">
+                          {family.variants.length > 1
+                            ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
+                            : `$${price.toLocaleString('es-CO')}`}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </section>
             ))}
           </div>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <h2 className="mb-3 font-semibold text-gray-900">Carrito</h2>
-            {cart.length === 0 ? (
-              <p className="text-sm text-gray-500">Agrega productos del catálogo.</p>
-            ) : (
-              <ul className="space-y-3">
-                {cart.map((line) => (
-                  <li key={line.key} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-900">
-                        {line.product.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        ${(line.product.pricePesos
-                          + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
-                        ).toLocaleString('es-CO')} c/u
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" onClick={() => changeQuantity(line.key, -1)}>-</Button>
-                      <span className="w-6 text-center text-sm">{line.quantity}</span>
-                      <Button variant="ghost" onClick={() => changeQuantity(line.key, 1)}>+</Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-4 border-t border-gray-200 pt-3 text-right text-lg font-bold text-gray-900">
-              Total ${total.toLocaleString('es-CO')}
-            </p>
-          </Card>
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-20 lg:z-auto lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-lg bg-gray-900 px-4 py-3 text-sm font-semibold text-white lg:hidden"
+            onClick={() => setCartOpen((open) => !open)}
+            aria-expanded={cartOpen}
+            aria-controls="sale-cart-panel"
+          >
+            <span>Carrito ({cartUnits})</span>
+            <span>
+              ${total.toLocaleString('es-CO')} · {cartOpen ? 'Cerrar' : 'Ver'}
+            </span>
+          </button>
 
-          <Card>
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Tipo
-                <select
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={type}
-                  onChange={(event) => setType(event.target.value as SaleInput['type'])}
-                >
-                  <option value="COUNTER">Mostrador</option>
-                  <option value="DELIVERY">Domicilio</option>
-                  <option value="DINE_IN">Mesa</option>
-                </select>
-              </label>
-              {type === 'DINE_IN' ? (
+          <div
+            id="sale-cart-panel"
+            role="region"
+            aria-label="Carrito"
+            className={`${cartOpen ? 'mt-2 max-h-[70vh] overflow-y-auto' : 'hidden'} space-y-4 lg:mt-0 lg:block lg:max-h-none lg:overflow-visible`}
+          >
+            <Card>
+              <h2 className="mb-3 font-semibold text-gray-900">Carrito</h2>
+              {cart.length === 0 ? (
+                <p className="text-sm text-gray-500">Agrega productos del catálogo.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {cart.map((line) => (
+                    <li key={line.key} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {line.product.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          ${(line.product.pricePesos
+                            + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
+                          ).toLocaleString('es-CO')} c/u
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" onClick={() => changeQuantity(line.key, -1)}>-</Button>
+                        <span className="w-6 text-center text-sm">{line.quantity}</span>
+                        <Button variant="ghost" onClick={() => changeQuantity(line.key, 1)}>+</Button>
+                        <Button
+                          variant="ghost"
+                          className="px-2 py-1 text-red-600"
+                          aria-label={`Eliminar ${line.product.name}`}
+                          onClick={() => removeLine(line.key)}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-4 border-t border-gray-200 pt-3 text-right text-lg font-bold text-gray-900">
+                Total ${total.toLocaleString('es-CO')}
+              </p>
+            </Card>
+
+            <Card>
+              <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700">
-                  Mesa
-                  <Input className="mt-1" value={tableLabel}
-                    onChange={(event) => setTableLabel(event.target.value)} />
+                  Tipo
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={type}
+                    onChange={(event) => setType(event.target.value as SaleInput['type'])}
+                  >
+                    <option value="COUNTER">Mostrador</option>
+                    <option value="DELIVERY">Domicilio</option>
+                    <option value="DINE_IN">Mesa</option>
+                  </select>
                 </label>
-              ) : null}
-              {type === 'DELIVERY' ? (
+                {type === 'DINE_IN' ? (
+                  <label className="block text-sm font-medium text-gray-700">
+                    Mesa
+                    <Input className="mt-1" value={tableLabel}
+                      onChange={(event) => setTableLabel(event.target.value)} />
+                  </label>
+                ) : null}
+                {type === 'DELIVERY' ? (
+                  <label className="block text-sm font-medium text-gray-700">
+                    Envío
+                    <Input className="mt-1" type="number" min={0} value={deliveryFee}
+                      onChange={(event) => setDeliveryFee(Number(event.target.value) || 0)} />
+                  </label>
+                ) : null}
                 <label className="block text-sm font-medium text-gray-700">
-                  Envío
-                  <Input className="mt-1" type="number" min={0} value={deliveryFee}
-                    onChange={(event) => setDeliveryFee(Number(event.target.value) || 0)} />
+                  Pago
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={method}
+                    onChange={(event) => setMethod(event.target.value as SaleInput['method'])}
+                  >
+                    <option value="CASH">Efectivo</option>
+                    <option value="CARD">Tarjeta</option>
+                    <option value="BREB">Bre-B</option>
+                  </select>
                 </label>
-              ) : null}
-              <label className="block text-sm font-medium text-gray-700">
-                Pago
-                <select
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={method}
-                  onChange={(event) => setMethod(event.target.value as SaleInput['method'])}
-                >
-                  <option value="CASH">Efectivo</option>
-                  <option value="CARD">Tarjeta</option>
-                  <option value="BREB">Bre-B</option>
-                </select>
-              </label>
-              <Button className="w-full" onClick={onCharge} disabled={submitting || cart.length === 0}>
-                {submitting ? 'Guardando…' : 'Cobrar'}
-              </Button>
-              {message ? <p className="text-sm text-green-700">{message}</p> : null}
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            </div>
-          </Card>
+                <Button className="w-full" onClick={onCharge} disabled={submitting || cart.length === 0}>
+                  {submitting ? 'Guardando…' : 'Cobrar'}
+                </Button>
+                {message ? <p className="text-sm text-green-700">{message}</p> : null}
+                {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
 
+      {pickingFamily ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-md">
+            <h2 className="mb-1 font-semibold text-gray-900">{pickingFamily.name}</h2>
+            <p className="mb-3 text-sm text-gray-500">Elige la presentación</p>
+            <div className="grid grid-cols-2 gap-2">
+              {pickingFamily.variants.map((variant) => (
+                <button
+                  key={variant.product.id}
+                  type="button"
+                  onClick={() => chooseVariant(variant.product)}
+                  className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
+                >
+                  <span className="block text-sm font-semibold text-gray-900">
+                    {variant.label}
+                  </span>
+                  <span className="text-sm text-brand-600">
+                    ${variant.product.pricePesos.toLocaleString('es-CO')}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="ghost" onClick={() => setPickingFamily(null)}>Cancelar</Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
       {picking ? (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <Card className="w-full max-w-md">
             <h2 className="mb-3 font-semibold text-gray-900">Modificadores de {picking.name}</h2>
             <div className="space-y-4">

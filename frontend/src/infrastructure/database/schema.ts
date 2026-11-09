@@ -29,6 +29,7 @@ export interface ProductRow {
   active: boolean
   modifierGroupIds: string[]
   components: ComponentRow[]
+  saleDays?: number[]
 }
 
 export interface ModifierRow {
@@ -177,6 +178,9 @@ export class CajaDb extends Dexie {
     })
     this.version(2).stores({
       operations: 'operationId, seq, status, entityId, type'
+    })
+    this.version(3).stores({
+      sales: 'id, status, operationalDate, createdAt'
     })
   }
 }
