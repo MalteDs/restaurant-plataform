@@ -96,6 +96,22 @@ class CatalogIT {
     assertEquals(12300, price(snapshot(), "Producto de prueba"));
   }
 
+  @Test void saleDaysRoundTripAndRejectInvalidDays() throws Exception {
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_dias"))
+            .content(json.writeValueAsString(Map.of("name", "COMBO PROMO", "pricePesos", 22500,
+                "saleDays", List.of(1, 2, 3, 4)))))
+        .andExpect(status().isCreated());
+
+    assertEquals(List.of(1, 2, 3, 4), product(snapshot(), "COMBO PROMO").get("saleDays"));
+
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_dias"))
+            .content(json.writeValueAsString(Map.of("name", "COMBO MALO", "pricePesos", 1000,
+                "saleDays", List.of(0, 8)))))
+        .andExpect(status().isBadRequest());
+  }
+
   @SuppressWarnings("unchecked")
   private Map<String, Object> snapshot() throws Exception {
     var body = mvc.perform(get("/api/catalog")

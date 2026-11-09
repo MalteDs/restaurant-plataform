@@ -8,10 +8,12 @@ import com.caja.catalog.CatalogSnapshot.ProductView;
 import com.caja.audit.AuditService;
 import com.caja.shared.tenant.TenantId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -54,7 +56,7 @@ public class CatalogService {
     var products = jdbc.query("""
         select p.id, p.tenant_id, p.location_id, p.category_id,
                coalesce(c.name, '') as category_name, p.kind, p.name, p.price_pesos, p.cost_pesos,
-               p.sort_order, p.active
+               p.sort_order, p.active, p.sale_days
         from products p
         left join categories c
           on c.id = p.category_id and c.tenant_id = p.tenant_id and c.location_id = p.location_id
@@ -66,7 +68,8 @@ public class CatalogService {
         rs.getString("category_name"), rs.getString("kind"),
         rs.getString("name"), rs.getLong("price_pesos"),
         (Long) rs.getObject("cost_pesos"), rs.getInt("sort_order"), rs.getBoolean("active"),
-        new ArrayList<>(), new ArrayList<>()), tenantId.value(), locationId);
+        new ArrayList<>(), new ArrayList<>(), parseSaleDays(rs.getString("sale_days"))),
+        tenantId.value(), locationId);
 
     var groups = jdbc.query("""
         select id, name, min_selection, max_selection
@@ -128,14 +131,16 @@ public class CatalogService {
 
   @Transactional
   public UUID createProduct(TenantId tenantId, UUID locationId, String name, UUID categoryId,
-                            long pricePesos, Long costPesos, String kind) {
+                            long pricePesos, Long costPesos, String kind,
+                            List<Integer> saleDays) {
     var id = UUID.randomUUID();
     try {
       jdbc.update("""
           insert into products(id, tenant_id, location_id, category_id, kind, name, price_pesos,
-                               cost_pesos)
-          values (?, ?, ?, ?, ?::product_kind, ?, ?, ?)
-          """, id, tenantId.value(), locationId, categoryId, kind, name, pricePesos, costPesos);
+                               cost_pesos, sale_days)
+          values (?, ?, ?, ?, ?::product_kind, ?, ?, ?, ?)
+          """, id, tenantId.value(), locationId, categoryId, kind, name, pricePesos, costPesos,
+          formatSaleDays(saleDays));
     } catch (DataIntegrityViolationException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "El producto ya existe o es invalido");
     }
@@ -147,7 +152,8 @@ public class CatalogService {
 
   @Transactional
   public void updateProduct(TenantId tenantId, UUID locationId, UUID productId, String name,
-                            UUID categoryId, Long pricePesos, Long costPesos, Boolean active) {
+                            UUID categoryId, Long pricePesos, Long costPesos, Boolean active,
+                            List<Integer> saleDays) {
     if (name != null && name.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
     }
@@ -155,10 +161,12 @@ public class CatalogService {
         update products
         set name = coalesce(?, name), category_id = coalesce(?, category_id),
             price_pesos = coalesce(?, price_pesos), cost_pesos = coalesce(?, cost_pesos),
-            active = coalesce(?, active), updated_at = now()
+            active = coalesce(?, active),
+            sale_days = case when ? then ? else sale_days end,
+            updated_at = now()
         where id = ? and tenant_id = ? and location_id = ?
-        """, name, categoryId, pricePesos, costPesos, active, productId, tenantId.value(),
-        locationId);
+        """, name, categoryId, pricePesos, costPesos, active, saleDays != null,
+        formatSaleDays(saleDays), productId, tenantId.value(), locationId);
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
@@ -245,6 +253,28 @@ public class CatalogService {
         update locations set catalog_version = catalog_version + 1
         where id = ? and tenant_id = ?
         """, locationId, tenantId.value());
+  }
+
+  private static List<Integer> parseSaleDays(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return List.of();
+    }
+    return Arrays.stream(raw.split(","))
+        .map(String::trim)
+        .filter(value -> !value.isEmpty())
+        .map(Integer::valueOf)
+        .toList();
+  }
+
+  private static String formatSaleDays(List<Integer> saleDays) {
+    if (saleDays == null || saleDays.isEmpty()) {
+      return null;
+    }
+    return saleDays.stream()
+        .distinct()
+        .sorted()
+        .map(String::valueOf)
+        .collect(Collectors.joining(","));
   }
 
   public record ModifierInput(String name, long additionalPricePesos) {

@@ -11,7 +11,8 @@ public record CatalogSnapshot(long version, List<CategoryView> categories, List<
   public record ProductView(UUID id, UUID tenantId, UUID locationId, UUID categoryId,
                             String categoryName, String kind, String name, long pricePesos,
                             Long costPesos, int sortOrder, boolean active,
-                            List<UUID> modifierGroupIds, List<ComponentView> components) {
+                            List<UUID> modifierGroupIds, List<ComponentView> components,
+                            List<Integer> saleDays) {
   }
 
   public record ComponentView(UUID productId, String name, int quantity) {

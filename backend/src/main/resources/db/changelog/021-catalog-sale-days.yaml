@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-catalog-sale-days
+      author: caja
+      changes:
+        - addColumn:
+            tableName: products
+            columns:
+              - column:
+                  name: sale_days
+                  type: varchar(20)
+        - sql:
+            sql: |
+              alter table products
+                add constraint products_sale_days_ck
+                check (sale_days is null or sale_days ~ '^[1-7](,[1-7])*$');
