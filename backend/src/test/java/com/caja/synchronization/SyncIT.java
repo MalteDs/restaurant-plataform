@@ -131,6 +131,15 @@ class SyncIT {
             + "(select id from sales where tenant_id = ?)", Long.class, ctx.tenantId()));
   }
 
+  @Test void splitPaymentsThroughSyncAreApplied() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(splitSaleOperation(ctx, "op-split", 1, 20000, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(2, jdbc.queryForObject("select count(*) from payments where sale_id = "
+        + "(select id from sales where tenant_id = ?)", Integer.class, ctx.tenantId()));
+  }
+
   @Test void twoHundredRetriesDoNotDuplicateTheSale() throws Exception {
     var ctx = fixture();
     var operation = saleOperation(ctx, "op-200", 1, 16500, Instant.now());
@@ -207,6 +216,31 @@ class SyncIT {
             "displayCode", "ALM-A-" + String.format("%06d", seq),
             "deviceSeq", seq,
             "items", List.of(item)));
+  }
+
+  private SyncOperation splitSaleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
+                                           Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var saleId = UUID.randomUUID();
+    var item = new java.util.HashMap<String, Object>();
+    item.put("productId", ctx.productId().toString());
+    item.put("productName", "SENCILLA");
+    item.put("categoryName", "HAMBURGUESAS");
+    item.put("quantity", 1);
+    item.put("unitPricePesos", unitPrice);
+    item.put("modifiers", List.of());
+    item.put("components", List.of());
+    return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
+        Map.of(
+            "type", "COUNTER",
+            "shiftId", ctx.shiftId().toString(),
+            "deliveryFeePesos", 0,
+            "displayCode", "ALM-A-" + String.format("%06d", seq),
+            "deviceSeq", seq,
+            "items", List.of(item),
+            "payments", List.of(
+                Map.of("method", "CASH", "amountPesos", 12000),
+                Map.of("method", "CARD", "amountPesos", 8000))));
   }
 
   private String syncStatus(Map<String, Object> result) {

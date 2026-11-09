@@ -216,11 +216,24 @@ public class SyncService {
           (String) item.get("note"), modifiers, components, catalogPrice,
           (String) item.get("overrideReason")));
     }
+    var deliveryFee = ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue();
+    var payments = new ArrayList<CreateSaleCommand.PaymentCommand>();
+    var rawPayments = (List<Map<String, Object>>) payload.get("payments");
+    if (rawPayments != null && !rawPayments.isEmpty()) {
+      for (Map<String, Object> payment : rawPayments) {
+        payments.add(new CreateSaleCommand.PaymentCommand(
+            PaymentMethod.valueOf((String) payment.get("method")),
+            ((Number) payment.get("amountPesos")).longValue()));
+      }
+    } else {
+      payments.add(new CreateSaleCommand.PaymentCommand(
+          PaymentMethod.valueOf((String) payload.get("method")),
+          CreateSaleCommand.totalOf(items, deliveryFee)));
+    }
     return new CreateSaleCommand(operation.entityId(), batch.tenantId(), batch.locationId(),
         batch.deviceId(), operation.userId(), uuid(payload.get("shiftId")),
         SaleType.valueOf((String) payload.get("type")), (String) payload.get("tableLabel"),
-        ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue(), items,
-        PaymentMethod.valueOf((String) payload.get("method")), operation.operationId(),
+        deliveryFee, items, payments, operation.operationId(),
         (String) payload.get("displayCode"),
         ((Number) payload.get("deviceSeq")).longValue(), operation.clientCreatedAt());
   }

@@ -52,8 +52,10 @@ public class ShiftApplicationService {
         where id = ? and tenant_id = ? and location_id = ?
         """, Long.class, shiftId, tenantId, locationId);
     var cashSales = jdbc.queryForObject("""
-        select coalesce(sum(s.total_pesos), 0)
-        from sales s join payments p on p.sale_id = s.id
+        select coalesce(sum(p.amount_pesos), 0)
+        from payments p
+        join sales s on s.id = p.sale_id and s.tenant_id = p.tenant_id
+                    and s.location_id = p.location_id
         where s.shift_id = ? and s.tenant_id = ? and s.location_id = ? and p.method = 'CASH'
         """, Long.class, shiftId, tenantId, locationId);
     var cashRefunds = jdbc.queryForObject("""

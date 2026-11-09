@@ -36,7 +36,8 @@ public class SaleApplicationService {
       return existing;
     }
     requireOpenShift(command);
-    var total = totalOf(command);
+    var total = command.totalPesos();
+    validatePayments(command, total);
     validateOverrides(command);
     var saleId = command.saleId();
     jdbc.update("""
@@ -53,7 +54,10 @@ public class SaleApplicationService {
     for (var item : command.items()) {
       insertItem(command, saleId, item);
     }
-    payments.charge(command.tenantId(), command.locationId(), saleId, command.method(), total);
+    for (var payment : command.payments()) {
+      payments.charge(command.tenantId(), command.locationId(), saleId, payment.method(),
+          payment.amountPesos());
+    }
     orders.fromSale(command, saleId, total);
     return new AppliedSale(saleId, command.shiftId(), command.type(), command.displayCode(), total,
         command.deliveryFeePesos());
@@ -96,9 +100,24 @@ public class SaleApplicationService {
   }
 
   private long lineTotal(CreateSaleCommand.ItemCommand item) {
-    var modifiers = item.modifiers().stream()
-        .mapToLong(CreateSaleCommand.ModifierCommand::additionalPricePesos).sum();
-    return (long) item.quantity() * (item.unitPricePesos() + modifiers);
+    return CreateSaleCommand.lineTotal(item);
+  }
+
+  private void validatePayments(CreateSaleCommand command, long total) {
+    var lines = command.payments();
+    if (lines == null || lines.isEmpty()) {
+      throw new IllegalArgumentException("La venta necesita al menos un pago");
+    }
+    long sum = 0;
+    for (var line : lines) {
+      if (line.amountPesos() < 0 || (total > 0 && line.amountPesos() == 0)) {
+        throw new IllegalArgumentException("Cada pago debe ser mayor que cero");
+      }
+      sum += line.amountPesos();
+    }
+    if (sum != total) {
+      throw new IllegalArgumentException("Los pagos no suman el total de la venta");
+    }
   }
 
   private void insertItem(CreateSaleCommand command, UUID saleId,

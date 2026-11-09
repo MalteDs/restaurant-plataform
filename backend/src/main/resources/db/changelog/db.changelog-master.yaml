@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/021-catalog-sale-days.yaml
   - include:
       file: db/changelog/022-price-override.yaml
+  - include:
+      file: db/changelog/023-split-payments.yaml
