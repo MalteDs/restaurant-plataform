@@ -45,6 +45,7 @@ function baseInput(): SaleInput {
         categoryName: 'HAMBURGUESAS',
         quantity: 2,
         unitPricePesos: 16500,
+        catalogUnitPricePesos: 16500,
         costPesos: null,
         modifiers: [],
         components: []
@@ -85,4 +86,34 @@ it('numera por dispositivo sin colisión', async () => {
 
   expect(first).toBe('ALM-A-000001')
   expect(second).toBe('ALM-A-000002')
+})
+
+it('un cajero no puede cambiar el precio', async () => {
+  const db = await seed()
+
+  await expect(createSale(db, {
+    ...baseInput(),
+    items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
+      overrideReason: 'descuento autorizado' }]
+  })).rejects.toThrow(/encargado|admin/i)
+  expect(await db.sales.count()).toBe(0)
+})
+
+it('un encargado guarda precio de lista, aplicado y motivo', async () => {
+  const db = await seed()
+  await db.users.put({ id: 'u1', username: 'ana', role: 'MANAGER' })
+
+  const out = await createSale(db, {
+    ...baseInput(),
+    items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
+      overrideReason: 'descuento autorizado' }]
+  })
+
+  const item = await db.saleItems.where('saleId').equals(out.saleId).first()
+  expect(item).toMatchObject({
+    unitPricePesos: 14000,
+    catalogUnitPricePesos: 16500,
+    overrideReason: 'descuento autorizado',
+    overrideUserId: 'u1'
+  })
 })

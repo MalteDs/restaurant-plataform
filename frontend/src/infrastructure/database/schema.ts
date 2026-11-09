@@ -73,6 +73,9 @@ export interface SaleItemRow {
   lineTotalPesos: number
   modifiers: ModifierRow[]
   components: ComponentRow[]
+  catalogUnitPricePesos?: number
+  overrideReason?: string | null
+  overrideUserId?: string | null
 }
 
 export interface PaymentRow {

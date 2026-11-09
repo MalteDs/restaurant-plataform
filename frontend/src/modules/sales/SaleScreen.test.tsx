@@ -1,15 +1,22 @@
 import 'fake-indexeddb/auto'
+import type { ComponentProps } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import { AuthProvider } from '../../app/providers/AuthProvider'
 import { openDb, type CajaDb } from '../../infrastructure/database/schema'
 import { bogotaWeekday } from '../../shared/dates'
 import SaleScreen from './SaleScreen'
 
 const opened: CajaDb[] = []
 
+function renderScreen(props: ComponentProps<typeof SaleScreen>) {
+  return render(<AuthProvider><SaleScreen {...props} /></AuthProvider>)
+}
+
 afterEach(async () => {
   vi.restoreAllMocks()
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
   while (opened.length) {
     const db = opened.pop()!
     db.close()
@@ -38,7 +45,7 @@ it('un doble clic crea una sola venta', async () => {
     totalPesos: 16500
   })
 
-  render(<SaleScreen database={db} onCreateSale={create} />)
+  renderScreen({ database: db, onCreateSale: create })
   await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }, { timeout: 5000 }))
   await userEvent.dblClick(screen.getByRole('button', { name: /cobrar/i }))
 
@@ -80,7 +87,7 @@ it('agrupa variantes y pide el tamaño antes de agregar', async () => {
     totalPesos: 24000
   })
 
-  render(<SaleScreen database={db} onCreateSale={create} />)
+  renderScreen({ database: db, onCreateSale: create })
   const family = await screen.findByRole('button', { name: /salchi toci - maiz/i })
   expect(family).toHaveTextContent(/desde \$18\.000/i)
   expect(screen.queryByRole('button', { name: /personal/i })).not.toBeInTheDocument()
@@ -110,7 +117,7 @@ it('permite eliminar una línea del carrito', async () => {
     components: []
   })
 
-  render(<SaleScreen database={db} />)
+  renderScreen({ database: db })
   await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
 
   const cart = screen.getByRole('region', { name: 'Carrito' })
@@ -156,8 +163,42 @@ it('oculta productos que no se venden hoy', async () => {
     }
   ])
 
-  render(<SaleScreen database={db} />)
+  renderScreen({ database: db })
 
   expect(await screen.findByRole('button', { name: /promo hoy/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /promo otro dia/i })).not.toBeInTheDocument()
+})
+
+it('el encargado ve el cambio de precio', async () => {
+  Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+  localStorage.setItem('caja.user', JSON.stringify({
+    id: 'u1', username: 'ana', role: 'MANAGER', tenantId: 't', locationId: 'l'
+  }))
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'SENCILLA', categoryName: 'HAMBURGUESAS', kind: 'PRODUCT',
+    pricePesos: 16500, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], components: []
+  })
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+
+  expect(screen.getByRole('button', { name: /cambiar precio/i })).toBeInTheDocument()
+})
+
+it('el cajero no ve el cambio de precio', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'SENCILLA', categoryName: 'HAMBURGUESAS', kind: 'PRODUCT',
+    pricePesos: 16500, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], components: []
+  })
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+
+  expect(screen.queryByRole('button', { name: /cambiar precio/i })).not.toBeInTheDocument()
 })

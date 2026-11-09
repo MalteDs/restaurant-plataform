@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductRow } from '../../infrastructure/database/schema'
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
+import { useAuth } from '../../app/providers/AuthProvider'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
@@ -9,6 +10,9 @@ interface CartLine {
   key: string
   product: ProductRow
   quantity: number
+  unitPricePesos: number
+  catalogUnitPricePesos: number
+  overrideReason: string | null
   modifiers: ModifierRow[]
 }
 
@@ -18,6 +22,8 @@ interface SaleScreenProps {
 }
 
 export default function SaleScreen({ database = db, onCreateSale }: SaleScreenProps) {
+  const { user } = useAuth()
+  const canOverride = user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const [products, setProducts] = useState<ProductRow[]>([])
   const [groups, setGroups] = useState<ModifierGroupRow[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
@@ -28,6 +34,10 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [picking, setPicking] = useState<ProductRow | null>(null)
   const [pickingFamily, setPickingFamily] = useState<ProductFamily | null>(null)
   const [selected, setSelected] = useState<Record<string, ModifierRow[]>>({})
+  const [priceLine, setPriceLine] = useState<CartLine | null>(null)
+  const [priceValue, setPriceValue] = useState('')
+  const [priceReason, setPriceReason] = useState('')
+  const [priceError, setPriceError] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
@@ -64,7 +74,8 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     productName: line.product.name,
     categoryName: line.product.categoryName,
     quantity: line.quantity,
-    unitPricePesos: line.product.pricePesos,
+    unitPricePesos: line.unitPricePesos,
+    catalogUnitPricePesos: line.catalogUnitPricePesos,
     costPesos: line.product.costPesos,
     modifiers: line.modifiers,
     components: line.product.components
@@ -73,7 +84,15 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   function addLine(product: ProductRow, modifiers: ModifierRow[]) {
     setCart((current) => [
       ...current,
-      { key: crypto.randomUUID(), product, quantity: 1, modifiers }
+      {
+        key: crypto.randomUUID(),
+        product,
+        quantity: 1,
+        unitPricePesos: product.pricePesos,
+        catalogUnitPricePesos: product.pricePesos,
+        overrideReason: null,
+        modifiers
+      }
     ])
   }
 
@@ -138,6 +157,38 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       .filter((line) => line.quantity > 0))
   }
 
+  function openPrice(line: CartLine) {
+    setPriceLine(line)
+    setPriceValue(String(line.unitPricePesos))
+    setPriceReason(line.overrideReason ?? '')
+    setPriceError('')
+  }
+
+  function savePrice() {
+    if (!priceLine) {
+      return
+    }
+    const price = Number(priceValue)
+    const reason = priceReason.trim()
+    if (!Number.isInteger(price) || price < 0) {
+      setPriceError('El precio debe ser un entero mayor o igual a 0')
+      return
+    }
+    if (reason.length < 5 || reason.length > 200) {
+      setPriceError('El motivo debe tener entre 5 y 200 caracteres')
+      return
+    }
+    setCart((current) => current.map((line) => line.key === priceLine.key
+      ? {
+          ...line,
+          unitPricePesos: price,
+          overrideReason: price === line.catalogUnitPricePesos ? null : reason
+        }
+      : line))
+    setPriceLine(null)
+    setPriceError('')
+  }
+
   async function onCharge() {
     const now = Date.now()
     if (submitting || now - lastCharge.current < 500 || cart.length === 0) {
@@ -163,7 +214,9 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
           productName: line.product.name,
           categoryName: line.product.categoryName,
           quantity: line.quantity,
-          unitPricePesos: line.product.pricePesos,
+          unitPricePesos: line.unitPricePesos,
+          catalogUnitPricePesos: line.catalogUnitPricePesos,
+          overrideReason: line.overrideReason,
           costPesos: line.product.costPesos,
           modifiers: line.modifiers,
           components: line.product.components
@@ -255,10 +308,24 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                           {line.product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          ${(line.product.pricePesos
+                          ${(line.unitPricePesos
                             + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
                           ).toLocaleString('es-CO')} c/u
                         </p>
+                        {line.unitPricePesos !== line.catalogUnitPricePesos ? (
+                          <p className="text-xs text-amber-700">
+                            Precio de lista ${line.catalogUnitPricePesos.toLocaleString('es-CO')}
+                          </p>
+                        ) : null}
+                        {canOverride ? (
+                          <Button
+                            variant="ghost"
+                            className="mt-1 px-2 py-1 text-xs"
+                            onClick={() => openPrice(line)}
+                          >
+                            Cambiar precio
+                          </Button>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" onClick={() => changeQuantity(line.key, -1)}>-</Button>
@@ -332,6 +399,36 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
           </div>
         </div>
       </div>
+
+      {priceLine ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-md">
+            <h2 className="mb-3 font-semibold text-gray-900">
+              Cambiar precio de {priceLine.product.name}
+            </h2>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Precio unitario
+                <Input className="mt-1" type="number" min={0} value={priceValue}
+                  onChange={(event) => setPriceValue(event.target.value)} />
+              </label>
+              <p className="text-xs text-gray-500">
+                Precio de lista ${priceLine.catalogUnitPricePesos.toLocaleString('es-CO')}
+              </p>
+              <label className="block text-sm font-medium text-gray-700">
+                Motivo
+                <Input className="mt-1" maxLength={200} value={priceReason}
+                  onChange={(event) => setPriceReason(event.target.value)} />
+              </label>
+              {priceError ? <p className="text-sm text-red-600">{priceError}</p> : null}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setPriceLine(null)}>Cancelar</Button>
+                <Button onClick={savePrice}>Guardar precio</Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       {pickingFamily ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

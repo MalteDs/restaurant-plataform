@@ -8,8 +8,10 @@ export interface SaleItemInput {
   categoryName: string
   quantity: number
   unitPricePesos: number
+  catalogUnitPricePesos: number
   costPesos: number | null
   note?: string | null
+  overrideReason?: string | null
   modifiers: ModifierRow[]
   components: ComponentRow[]
 }
@@ -73,6 +75,21 @@ export async function createSale(
   if (!userId) {
     throw new Error('No hay usuario activo')
   }
+  const user = await database.users.get(userId)
+  const overrides = input.items.filter(
+    (item) => item.unitPricePesos !== item.catalogUnitPricePesos
+  )
+  if (overrides.length > 0) {
+    if (user?.role !== 'MANAGER' && user?.role !== 'ADMIN') {
+      throw new Error('Solo encargado o admin puede cambiar precios')
+    }
+    for (const item of overrides) {
+      const reason = item.overrideReason?.trim() ?? ''
+      if (reason.length < 5 || reason.length > 200) {
+        throw new Error('El cambio de precio necesita un motivo de al menos 5 caracteres')
+      }
+    }
+  }
   const prefixRow = await database.meta.get('devicePrefix')
   const prefix = deps.devicePrefix
     ?? (typeof prefixRow?.value === 'string' ? prefixRow.value : 'ALM-A')
@@ -106,19 +123,25 @@ export async function createSale(
         deliveryFeePesos: input.deliveryFeePesos ?? 0
       })
       await database.saleItems.bulkAdd(
-        input.items.map((item) => ({
-          id: crypto.randomUUID(),
-          saleId,
-          productId: item.productId,
-          productName: item.productName,
-          categoryName: item.categoryName,
-          quantity: item.quantity,
-          unitPricePesos: item.unitPricePesos,
-          costPesos: item.costPesos,
-          lineTotalPesos: lineTotal(item),
-          modifiers: item.modifiers,
-          components: item.components
-        }))
+        input.items.map((item) => {
+          const override = item.unitPricePesos !== item.catalogUnitPricePesos
+          return {
+            id: crypto.randomUUID(),
+            saleId,
+            productId: item.productId,
+            productName: item.productName,
+            categoryName: item.categoryName,
+            quantity: item.quantity,
+            unitPricePesos: item.unitPricePesos,
+            catalogUnitPricePesos: item.catalogUnitPricePesos,
+            overrideReason: override ? item.overrideReason ?? null : null,
+            overrideUserId: override ? userId : null,
+            costPesos: item.costPesos,
+            lineTotalPesos: lineTotal(item),
+            modifiers: item.modifiers,
+            components: item.components
+          }
+        })
       )
       await database.payments.add({
         id: crypto.randomUUID(),
@@ -149,6 +172,10 @@ export async function createSale(
             categoryName: item.categoryName,
             quantity: item.quantity,
             unitPricePesos: item.unitPricePesos,
+            catalogUnitPricePesos: item.catalogUnitPricePesos,
+            overrideReason: item.unitPricePesos !== item.catalogUnitPricePesos
+              ? item.overrideReason ?? null
+              : null,
             costPesos: item.costPesos,
             note: item.note ?? null,
             modifiers: item.modifiers.map((modifier) => ({
