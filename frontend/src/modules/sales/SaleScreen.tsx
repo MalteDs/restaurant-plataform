@@ -57,6 +57,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [error, setError] = useState('')
   const [now, setNow] = useState(new Date())
   const lastCharge = useRef(0)
+  const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void database.products.toArray().then((rows) => setProducts(rows.filter((row) => row.active)))
@@ -300,78 +301,99 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     ? groups.filter((group) => picking.modifierGroupIds.includes(group.id))
     : []
 
+  function scrollToCategory(category: string) {
+    if (query.trim() !== '') {
+      setQuery('')
+      window.requestAnimationFrame(() => scrollToCategory(category))
+      return
+    }
+    const target = document.getElementById(categorySectionId(category))
+    if (!target) {
+      return
+    }
+    const headerHeight = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--header-height')
+    ) || 0
+    const toolbarHeight = toolbarRef.current?.offsetHeight ?? 0
+    window.scrollTo({
+      top: target.getBoundingClientRect().top + window.scrollY - headerHeight - toolbarHeight - 16,
+      behavior: 'smooth'
+    })
+  }
+
   return (
     <div className="pb-24 lg:pb-0">
       <PageHeader title="Venta" subtitle="Precios congelados del catálogo local" />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Input
-                aria-label="Buscar producto"
-                placeholder="Buscar producto…"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              {query.trim() === '' ? (
-                <div className="flex flex-wrap gap-2">
-                  {grouped.map(([category]) => (
-                    <button
-                      key={category}
-                      type="button"
-                      onClick={() => document
-                        .getElementById(categorySectionId(category))
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                      className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-500"
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            {visibleGroups.length === 0 ? (
-              <p className="text-sm text-gray-500">Sin productos para esa búsqueda.</p>
-            ) : null}
-            {visibleGroups.map(([category, families]) => (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-40 lg:scroll-mt-24">
-                <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+        <div className="space-y-4">
+          <div
+            ref={toolbarRef}
+            className="sticky top-[var(--header-height)] z-30 space-y-2 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur"
+          >
+            <Input
+              aria-label="Buscar producto"
+              placeholder="Buscar producto…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              {grouped.map(([category]) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => scrollToCategory(category)}
+                  className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-500"
+                >
                   {category}
-                </h2>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                  {families.map((family) => {
-                    const price = family.variants[0]?.product.pricePesos ?? 0
-                    return (
-                      <button
-                        key={family.key}
-                        type="button"
-                        onClick={() => pickFamily(family)}
-                        className="flex min-h-[76px] flex-col justify-between rounded-xl border border-gray-200 p-3 text-left transition hover:border-brand-500 hover:shadow-sm active:scale-[0.99]"
-                      >
-                        <span className="block text-sm font-semibold text-gray-900">
-                          {family.name}
-                        </span>
-                        <span className="mt-1 flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-brand-600">
-                            {family.variants.length > 1
-                              ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
-                              : `$${price.toLocaleString('es-CO')}`}
-                          </span>
-                          <span aria-hidden className="text-lg font-bold leading-none text-brand-600">
-                            +
-                          </span>
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-        </Card>
+          <Card>
+            <div className="space-y-4">
+              {visibleGroups.length === 0 ? (
+                <p className="text-sm text-gray-500">Sin productos para esa búsqueda.</p>
+              ) : null}
+              {visibleGroups.map(([category, families]) => (
+                <section key={category} id={categorySectionId(category)}>
+                  <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+                    {category}
+                  </h2>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                    {families.map((family) => {
+                      const price = family.variants[0]?.product.pricePesos ?? 0
+                      return (
+                        <button
+                          key={family.key}
+                          type="button"
+                          onClick={() => pickFamily(family)}
+                          className="flex min-h-[76px] flex-col justify-between rounded-xl border border-gray-200 p-3 text-left transition hover:border-brand-500 hover:shadow-sm active:scale-[0.99]"
+                        >
+                          <span className="block text-sm font-semibold text-gray-900">
+                            {family.name}
+                          </span>
+                          <span className="mt-1 flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium text-brand-600">
+                              {family.variants.length > 1
+                                ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
+                                : `$${price.toLocaleString('es-CO')}`}
+                            </span>
+                            <span aria-hidden className="text-lg font-bold leading-none text-brand-600">
+                              +
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </Card>
+        </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-20 lg:z-auto lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-[calc(var(--header-height)+1rem)] lg:z-auto lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <button
             type="button"
             className="flex w-full items-center justify-between rounded-lg bg-gray-900 px-4 py-3 text-sm font-semibold text-white lg:hidden"

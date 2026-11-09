@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import type { Role } from '../providers/AuthProvider'
 import { useAuth } from '../providers/AuthProvider'
@@ -40,10 +40,28 @@ function NavItemLink({ item }: { item: NavItem }) {
 export function ShellLayout({ children }: { children?: ReactNode }) {
   const { user, lock, logout } = useAuth()
   const navigate = useNavigate()
+  const headerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) {
+      return
+    }
+    const update = () => document.documentElement.style.setProperty(
+      '--header-height',
+      `${header.offsetHeight}px`
+    )
+    update()
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      document.documentElement.style.removeProperty('--header-height')
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <span className="text-lg font-bold text-brand-600">Caja Karbón</span>
           <nav
