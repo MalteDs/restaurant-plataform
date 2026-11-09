@@ -3,20 +3,11 @@ import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductR
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { useAuth } from '../../app/providers/AuthProvider'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
 
 type PaymentMethod = SaleInput['payments'][number]['method']
-
-interface CartLine {
-  key: string
-  product: ProductRow
-  quantity: number
-  unitPricePesos: number
-  catalogUnitPricePesos: number
-  overrideReason: string | null
-  modifiers: ModifierRow[]
-}
 
 interface SaleScreenProps {
   database?: CajaDb
@@ -93,18 +84,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const remaining = total - parts.reduce((sum, part) => sum + part.amountPesos, 0)
 
   function addLine(product: ProductRow, modifiers: ModifierRow[]) {
-    setCart((current) => [
-      ...current,
-      {
-        key: crypto.randomUUID(),
-        product,
-        quantity: 1,
-        unitPricePesos: product.pricePesos,
-        catalogUnitPricePesos: product.pricePesos,
-        overrideReason: null,
-        modifiers
-      }
-    ])
+    setCart((current) => addToCart(current, product, modifiers))
   }
 
   function pick(product: ProductRow) {

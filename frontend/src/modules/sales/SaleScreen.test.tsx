@@ -235,3 +235,30 @@ it('divide el pago entre efectivo y tarjeta', async () => {
     { method: 'CARD', amountPesos: 3000 }
   ])
 })
+
+it('un segundo clic sobre el mismo producto suma cantidad en la misma línea', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1',
+    name: 'SENCILLA',
+    categoryName: 'HAMBURGUESAS',
+    kind: 'PRODUCT',
+    pricePesos: 16500,
+    costPesos: null,
+    sortOrder: 1,
+    active: true,
+    modifierGroupIds: [],
+    components: []
+  })
+
+  renderScreen({ database: db })
+  const product = await screen.findByRole('button', { name: /sencilla/i })
+  await userEvent.click(product)
+  await userEvent.click(product)
+
+  const cart = screen.getByRole('region', { name: 'Carrito' })
+  expect(within(cart).getAllByText('SENCILLA')).toHaveLength(1)
+  expect(within(cart).getByText('2')).toBeInTheDocument()
+  expect(within(cart).getByText(/total \$33\.000/i)).toBeInTheDocument()
+})
