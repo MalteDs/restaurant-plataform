@@ -262,3 +262,96 @@ it('un segundo clic sobre el mismo producto suma cantidad en la misma línea', a
   expect(within(cart).getByText('2')).toBeInTheDocument()
   expect(within(cart).getByText(/total \$33\.000/i)).toBeInTheDocument()
 })
+
+it('filtra por nombre sin distinguir mayúsculas ni tildes', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.bulkPut([
+    {
+      id: 'p1',
+      name: 'PIÑA COLADA',
+      categoryName: 'BEBIDAS',
+      kind: 'PRODUCT',
+      pricePesos: 14500,
+      costPesos: null,
+      sortOrder: 1,
+      active: true,
+      modifierGroupIds: [],
+      components: []
+    },
+    {
+      id: 'p2',
+      name: 'SENCILLA',
+      categoryName: 'HAMBURGUESAS',
+      kind: 'PRODUCT',
+      pricePesos: 16500,
+      costPesos: null,
+      sortOrder: 1,
+      active: true,
+      modifierGroupIds: [],
+      components: []
+    }
+  ])
+
+  renderScreen({ database: db })
+  await screen.findByRole('button', { name: /piña colada/i })
+  await userEvent.type(screen.getByLabelText(/buscar producto/i), 'pina')
+
+  expect(screen.getByRole('button', { name: /piña colada/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /sencilla/i })).not.toBeInTheDocument()
+})
+
+it('avisa cuando la búsqueda no tiene coincidencias', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1',
+    name: 'SENCILLA',
+    categoryName: 'HAMBURGUESAS',
+    kind: 'PRODUCT',
+    pricePesos: 16500,
+    costPesos: null,
+    sortOrder: 1,
+    active: true,
+    modifierGroupIds: [],
+    components: []
+  })
+
+  renderScreen({ database: db })
+  await screen.findByRole('button', { name: /sencilla/i })
+  await userEvent.type(screen.getByLabelText(/buscar producto/i), 'zzz')
+
+  expect(screen.getByText(/sin productos/i)).toBeInTheDocument()
+})
+
+it('muestra los modificadores elegidos en el carrito', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.modifierGroups.put({
+    id: 'g1',
+    name: 'EXTRAS',
+    minSelection: 0,
+    maxSelection: 1,
+    modifiers: [{ id: 'm1', name: 'Extra queso', additionalPricePesos: 2000 }]
+  })
+  await db.products.put({
+    id: 'p1',
+    name: 'SENCILLA',
+    categoryName: 'HAMBURGUESAS',
+    kind: 'PRODUCT',
+    pricePesos: 16500,
+    costPesos: null,
+    sortOrder: 1,
+    active: true,
+    modifierGroupIds: ['g1'],
+    components: []
+  })
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.click(screen.getByLabelText(/extra queso/i))
+  await userEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
+
+  const cart = screen.getByRole('region', { name: 'Carrito' })
+  expect(within(cart).getByText(/extra queso/i)).toBeInTheDocument()
+})

@@ -9,6 +9,17 @@ import { isProductSellable } from './sale-days'
 
 type PaymentMethod = SaleInput['payments'][number]['method']
 
+function normalizeSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase('es-CO')
+}
+
+function categorySectionId(category: string): string {
+  return `category-${normalizeSearch(category).replace(/[^a-z0-9]+/g, '-')}`
+}
+
 interface SaleScreenProps {
   database?: CajaDb
   onCreateSale?: (input: SaleInput) => Promise<CreatedSale>
@@ -40,6 +51,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [priceReason, setPriceReason] = useState('')
   const [priceError, setPriceError] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -67,6 +79,19 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     }
     return [...byCategory.entries()]
   }, [products, now])
+
+  const visibleGroups = useMemo(() => {
+    const needle = normalizeSearch(query.trim())
+    if (!needle) {
+      return grouped
+    }
+    return grouped
+      .map(([category, families]) => [
+        category,
+        families.filter((family) => normalizeSearch(family.name).includes(needle))
+      ] as const)
+      .filter(([, families]) => families.length > 0)
+  }, [grouped, query])
 
   const cartUnits = cart.reduce((sum, line) => sum + line.quantity, 0)
 
@@ -282,8 +307,35 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card>
           <div className="space-y-4">
-            {grouped.map(([category, families]) => (
-              <section key={category}>
+            <div className="space-y-2">
+              <Input
+                aria-label="Buscar producto"
+                placeholder="Buscar producto…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              {query.trim() === '' ? (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {grouped.map(([category]) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => document
+                        .getElementById(categorySectionId(category))
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-500"
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {visibleGroups.length === 0 ? (
+              <p className="text-sm text-gray-500">Sin productos para esa búsqueda.</p>
+            ) : null}
+            {visibleGroups.map(([category, families]) => (
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-4">
                 <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
                   {category}
                 </h2>
@@ -295,15 +347,20 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                         key={family.key}
                         type="button"
                         onClick={() => pickFamily(family)}
-                        className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
+                        className="flex min-h-[76px] flex-col justify-between rounded-xl border border-gray-200 p-3 text-left transition hover:border-brand-500 hover:shadow-sm active:scale-[0.99]"
                       >
                         <span className="block text-sm font-semibold text-gray-900">
                           {family.name}
                         </span>
-                        <span className="text-sm text-brand-600">
-                          {family.variants.length > 1
-                            ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
-                            : `$${price.toLocaleString('es-CO')}`}
+                        <span className="mt-1 flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-brand-600">
+                            {family.variants.length > 1
+                              ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
+                              : `$${price.toLocaleString('es-CO')}`}
+                          </span>
+                          <span aria-hidden className="text-lg font-bold leading-none text-brand-600">
+                            +
+                          </span>
                         </span>
                       </button>
                     )
@@ -346,6 +403,11 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                         <p className="truncate text-sm font-medium text-gray-900">
                           {line.product.name}
                         </p>
+                        {line.modifiers.length > 0 ? (
+                          <p className="text-xs text-gray-500">
+                            {line.modifiers.map((modifier) => modifier.name).join(' · ')}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-gray-500">
                           ${(line.unitPricePesos
                             + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
