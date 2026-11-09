@@ -1,5 +1,13 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
+export const SESSION_EXPIRED_EVENT = 'caja:session-expired'
+
+const ACCESS_KEY = 'caja.accessToken'
+const REFRESH_KEY = 'caja.refreshToken'
+const USER_KEY = 'caja.user'
+
+let refreshInFlight: Promise<boolean> | null = null
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -9,8 +17,21 @@ export class ApiError extends Error {
   }
 }
 
-async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = localStorage.getItem('caja.refreshToken')
+function clearSession() {
+  const hadSession =
+    localStorage.getItem(ACCESS_KEY) !== null ||
+    localStorage.getItem(REFRESH_KEY) !== null ||
+    localStorage.getItem(USER_KEY) !== null
+  localStorage.removeItem(ACCESS_KEY)
+  localStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem(USER_KEY)
+  if (hadSession) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+  }
+}
+
+async function performRefresh(): Promise<boolean> {
+  const refreshToken = localStorage.getItem(REFRESH_KEY)
   if (!refreshToken) {
     return false
   }
@@ -23,12 +44,25 @@ async function refreshAccessToken(): Promise<boolean> {
     return false
   }
   const session = await response.json()
-  localStorage.setItem('caja.accessToken', session.accessToken)
-  localStorage.setItem('caja.refreshToken', session.refreshToken)
+  localStorage.setItem(ACCESS_KEY, session.accessToken)
+  localStorage.setItem(REFRESH_KEY, session.refreshToken)
   if (session.user) {
-    localStorage.setItem('caja.user', JSON.stringify(session.user))
+    localStorage.setItem(USER_KEY, JSON.stringify(session.user))
   }
   return true
+}
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = performRefresh().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  try {
+    return await refreshInFlight
+  } catch {
+    return false
+  }
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -36,7 +70,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  const accessToken = localStorage.getItem('caja.accessToken')
+  const accessToken = localStorage.getItem(ACCESS_KEY)
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`)
   }
@@ -49,14 +83,21 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
 
   let response = await fetch(`${BASE_URL}${path}`, { ...init, headers })
-  if (response.status === 401 && !path.startsWith('/api/auth/')) {
+  if (
+    response.status === 401 &&
+    !path.startsWith('/api/auth/') &&
+    !path.startsWith('/api/sync/')
+  ) {
     if (await refreshAccessToken()) {
       const retryHeaders = new Headers(headers)
-      const renewed = localStorage.getItem('caja.accessToken')
+      const renewed = localStorage.getItem(ACCESS_KEY)
       if (renewed) {
         retryHeaders.set('Authorization', `Bearer ${renewed}`)
       }
       response = await fetch(`${BASE_URL}${path}`, { ...init, headers: retryHeaders })
+    }
+    if (response.status === 401) {
+      clearSession()
     }
   }
   if (!response.ok) {

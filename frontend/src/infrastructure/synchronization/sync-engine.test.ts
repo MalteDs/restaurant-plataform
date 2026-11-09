@@ -1,12 +1,19 @@
 import 'fake-indexeddb/auto'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openDb, type CajaDb, type OperationRow } from '../../infrastructure/database/schema'
+import { ApiError } from '../api/client'
 import { pushPending, type SyncApi } from './sync-engine'
 
 const opened: CajaDb[] = []
 
+beforeEach(() => {
+  localStorage.clear()
+  localStorage.setItem('caja.deviceToken', 'device-token')
+})
+
 afterEach(async () => {
   vi.restoreAllMocks()
+  localStorage.clear()
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
   while (opened.length) {
     const db = opened.pop()!
@@ -78,4 +85,33 @@ it('marca error y programa reintento cuando el servidor no responde', async () =
   const operation = await db.operations.get('op-1')
   expect(operation?.attempts).toBe(1)
   expect(operation?.nextRetryAt).toBeDefined()
+})
+
+it('no llama al servidor si el dispositivo no está registrado', async () => {
+  localStorage.removeItem('caja.deviceToken')
+  const db = await seed(['op-1'])
+  const api: SyncApi = { post: vi.fn() }
+
+  const result = await pushPending(db, api)
+
+  expect(result.status).toBe('unregistered')
+  expect(api.post).not.toHaveBeenCalled()
+  expect(await db.operations.count()).toBe(1)
+})
+
+it('trata un 401 como dispositivo inválido y no reintenta con el mismo token', async () => {
+  localStorage.setItem('caja.deviceToken', 'revoked-token')
+  const db = await seed(['op-1'])
+  const api: SyncApi = {
+    post: vi.fn().mockRejectedValue(new ApiError(401, 'no autorizado'))
+  }
+
+  const first = await pushPending(db, api)
+  expect(first.status).toBe('auth-error')
+  expect(api.post).toHaveBeenCalledTimes(1)
+  expect((await db.operations.get('op-1'))?.error).toMatch(/dispositivo/i)
+
+  const second = await pushPending(db, api, Date.now() + 10 * 60_000)
+  expect(second.status).toBe('auth-error')
+  expect(api.post).toHaveBeenCalledTimes(1)
 })
