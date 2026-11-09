@@ -44,7 +44,7 @@ export function ShellLayout({ children }: { children?: ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <span className="text-lg font-bold text-brand-600">Caja Karbón</span>
           <nav
             className="order-3 w-full overflow-x-auto lg:order-none lg:w-auto lg:flex-1"
@@ -66,7 +66,7 @@ export function ShellLayout({ children }: { children?: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl p-4">{children ?? <Outlet />}</main>
+      <main className="mx-auto max-w-screen-2xl p-4">{children ?? <Outlet />}</main>
     </div>
   )
 }

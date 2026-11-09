@@ -315,7 +315,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                 onChange={(event) => setQuery(event.target.value)}
               />
               {query.trim() === '' ? (
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="flex flex-wrap gap-2">
                   {grouped.map(([category]) => (
                     <button
                       key={category}
@@ -335,11 +335,11 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
               <p className="text-sm text-gray-500">Sin productos para esa búsqueda.</p>
             ) : null}
             {visibleGroups.map(([category, families]) => (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-4">
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-40 lg:scroll-mt-24">
                 <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
                   {category}
                 </h2>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                   {families.map((family) => {
                     const price = family.variants[0]?.product.pricePesos ?? 0
                     return (
