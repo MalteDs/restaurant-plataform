@@ -6,6 +6,8 @@ import { Button, Card, Input, PageHeader } from '../../shared/ui'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
 
+type PaymentMethod = SaleInput['payments'][number]['method']
+
 interface CartLine {
   key: string
   product: ProductRow
@@ -30,7 +32,15 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [type, setType] = useState<SaleInput['type']>('COUNTER')
   const [tableLabel, setTableLabel] = useState('')
   const [deliveryFee, setDeliveryFee] = useState(0)
-  const [method, setMethod] = useState<SaleInput['method']>('CASH')
+  const [method, setMethod] = useState<PaymentMethod>('CASH')
+  const [splitMode, setSplitMode] = useState(false)
+  const [parts, setParts] = useState<Array<{
+    key: string
+    method: PaymentMethod
+    amountPesos: number
+  }>>([])
+  const [partMethod, setPartMethod] = useState<PaymentMethod>('CARD')
+  const [partAmount, setPartAmount] = useState('')
   const [picking, setPicking] = useState<ProductRow | null>(null)
   const [pickingFamily, setPickingFamily] = useState<ProductFamily | null>(null)
   const [selected, setSelected] = useState<Record<string, ModifierRow[]>>({})
@@ -80,6 +90,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     modifiers: line.modifiers,
     components: line.product.components
   }), 0) + (type === 'DELIVERY' ? deliveryFee : 0)
+  const remaining = total - parts.reduce((sum, part) => sum + part.amountPesos, 0)
 
   function addLine(product: ProductRow, modifiers: ModifierRow[]) {
     setCart((current) => [
@@ -189,6 +200,45 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     setPriceError('')
   }
 
+  function startSplit() {
+    setSplitMode(true)
+    setParts([{ key: crypto.randomUUID(), method, amountPesos: total }])
+    setPartAmount('')
+  }
+
+  function cancelSplit() {
+    setSplitMode(false)
+    setParts([])
+  }
+
+  function changePartMethod(key: string, nextMethod: PaymentMethod) {
+    setParts((current) => current.map((part) => part.key === key
+      ? { ...part, method: nextMethod }
+      : part))
+  }
+
+  function changePartAmount(key: string, value: string) {
+    const amount = Number(value)
+    setParts((current) => current.map((part) => part.key === key
+      ? { ...part, amountPesos: Number.isFinite(amount) ? amount : 0 }
+      : part))
+  }
+
+  function addPart() {
+    const amount = Number(partAmount) || remaining
+    if (amount <= 0) {
+      return
+    }
+    setParts((current) => [...current, {
+      key: crypto.randomUUID(), method: partMethod, amountPesos: amount
+    }])
+    setPartAmount('')
+  }
+
+  function removePart(key: string) {
+    setParts((current) => current.filter((part) => part.key !== key))
+  }
+
   async function onCharge() {
     const now = Date.now()
     if (submitting || now - lastCharge.current < 500 || cart.length === 0) {
@@ -201,6 +251,13 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       setError('La mesa necesita una etiqueta')
       return
     }
+    if (splitMode && remaining !== 0) {
+      setError('Los pagos no suman el total')
+      return
+    }
+    const payments = splitMode
+      ? parts.map((part) => ({ method: part.method, amountPesos: part.amountPesos }))
+      : [{ method, amountPesos: total }]
     setSubmitting(true)
     try {
       const charge = onCreateSale ?? ((input: SaleInput) => createSale(database, input))
@@ -208,7 +265,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
         type,
         tableLabel: type === 'DINE_IN' ? tableLabel : null,
         deliveryFeePesos: type === 'DELIVERY' ? deliveryFee : 0,
-        method,
+        payments,
         items: cart.map((line) => ({
           productId: line.product.id,
           productName: line.product.name,
@@ -224,6 +281,8 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       })
       setCart([])
       setCartOpen(false)
+      setSplitMode(false)
+      setParts([])
       setMessage(`Venta ${created.displayCode} guardada`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo cobrar')
@@ -377,19 +436,99 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                       onChange={(event) => setDeliveryFee(Number(event.target.value) || 0)} />
                   </label>
                 ) : null}
-                <label className="block text-sm font-medium text-gray-700">
-                  Pago
-                  <select
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={method}
-                    onChange={(event) => setMethod(event.target.value as SaleInput['method'])}
-                  >
-                    <option value="CASH">Efectivo</option>
-                    <option value="CARD">Tarjeta</option>
-                    <option value="BREB">Bre-B</option>
-                  </select>
-                </label>
-                <Button className="w-full" onClick={onCharge} disabled={submitting || cart.length === 0}>
+                {!splitMode ? (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Pago
+                      <select
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        value={method}
+                        onChange={(event) => setMethod(event.target.value as PaymentMethod)}
+                      >
+                        <option value="CASH">Efectivo</option>
+                        <option value="CARD">Tarjeta</option>
+                        <option value="BREB">Bre-B</option>
+                      </select>
+                    </label>
+                    <Button variant="ghost" className="w-full" onClick={startSplit}
+                      disabled={cart.length === 0}>
+                      Dividir pago
+                    </Button>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {parts.map((part, index) => (
+                      <div key={part.key} className="flex items-end gap-2">
+                        <label className="block flex-1 text-sm font-medium text-gray-700">
+                          Medio
+                          <select
+                            aria-label={`Medio del pago ${index + 1}`}
+                            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            value={part.method}
+                            onChange={(event) =>
+                              changePartMethod(part.key, event.target.value as PaymentMethod)}
+                          >
+                            <option value="CASH">Efectivo</option>
+                            <option value="CARD">Tarjeta</option>
+                            <option value="BREB">Bre-B</option>
+                          </select>
+                        </label>
+                        <label className="block w-28 text-sm font-medium text-gray-700">
+                          Monto
+                          <Input
+                            aria-label={`Monto del pago ${index + 1}`}
+                            className="mt-1"
+                            type="number"
+                            min={0}
+                            value={String(part.amountPesos)}
+                            onChange={(event) => changePartAmount(part.key, event.target.value)}
+                          />
+                        </label>
+                        <Button variant="ghost" className="px-2 py-1 text-red-600"
+                          aria-label={`Quitar pago ${index + 1}`}
+                          onClick={() => removePart(part.key)}>
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                    <p className={`text-sm ${remaining === 0 ? 'text-green-700' : 'text-amber-700'}`}>
+                      Restante ${remaining.toLocaleString('es-CO')}
+                    </p>
+                    <div className="flex items-end gap-2">
+                      <label className="block flex-1 text-sm font-medium text-gray-700">
+                        Medio
+                        <select
+                          aria-label="Medio del nuevo pago"
+                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          value={partMethod}
+                          onChange={(event) => setPartMethod(event.target.value as PaymentMethod)}
+                        >
+                          <option value="CASH">Efectivo</option>
+                          <option value="CARD">Tarjeta</option>
+                          <option value="BREB">Bre-B</option>
+                        </select>
+                      </label>
+                      <label className="block w-28 text-sm font-medium text-gray-700">
+                        Monto
+                        <Input
+                          aria-label="Monto del nuevo pago"
+                          className="mt-1"
+                          type="number"
+                          min={0}
+                          value={partAmount}
+                          placeholder={String(Math.max(remaining, 0))}
+                          onChange={(event) => setPartAmount(event.target.value)}
+                        />
+                      </label>
+                      <Button variant="ghost" onClick={addPart}>Agregar pago</Button>
+                    </div>
+                    <Button variant="ghost" className="w-full" onClick={cancelSplit}>
+                      Cancelar división
+                    </Button>
+                  </div>
+                )}
+                <Button className="w-full" onClick={onCharge}
+                  disabled={submitting || cart.length === 0 || (splitMode && remaining !== 0)}>
                   {submitting ? 'Guardando…' : 'Cobrar'}
                 </Button>
                 {message ? <p className="text-sm text-green-700">{message}</p> : null}

@@ -35,14 +35,20 @@ async function seedPaidSale(totalPesos: number) {
 it('devuelve offline con motivo y encola la operación', async () => {
   const db = await seedPaidSale(16500)
 
-  await expect(refundSale({ saleId: 'sale-1', reason: '', userId: 'u1' }, db))
+  await expect(refundSale({ saleId: 'sale-1', reason: '', method: 'CASH', userId: 'u1' }, db))
     .rejects.toThrow()
 
-  const result = await refundSale({ saleId: 'sale-1', reason: 'cobro equivocado', userId: 'u1' }, db)
+  const result = await refundSale(
+    { saleId: 'sale-1', reason: 'cobro equivocado', method: 'CARD', userId: 'u1' },
+    db
+  )
 
   expect(result.amountPesos).toBe(16500)
   expect((await db.sales.get('sale-1'))?.status).toBe('REFUNDED')
+  expect((await db.refunds.get(result.refundId))?.method).toBe('CARD')
   const operation = await db.operations.where('type').equals('REFUND_SALE').first()
   expect(operation?.status).toBe('LOCAL_PENDING')
-  expect(operation?.payload).toMatchObject({ saleId: 'sale-1', reason: 'cobro equivocado' })
+  expect(operation?.payload).toMatchObject({
+    saleId: 'sale-1', reason: 'cobro equivocado', method: 'CARD'
+  })
 })

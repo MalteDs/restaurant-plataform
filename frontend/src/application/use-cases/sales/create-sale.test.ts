@@ -37,7 +37,7 @@ async function seed() {
 function baseInput(): SaleInput {
   return {
     type: 'COUNTER',
-    method: 'CASH',
+    payments: [{ method: 'CASH', amountPesos: 33000 }],
     items: [
       {
         productId: 'p1',
@@ -93,6 +93,7 @@ it('un cajero no puede cambiar el precio', async () => {
 
   await expect(createSale(db, {
     ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 28000 }],
     items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
       overrideReason: 'descuento autorizado' }]
   })).rejects.toThrow(/encargado|admin/i)
@@ -105,6 +106,7 @@ it('un encargado guarda precio de lista, aplicado y motivo', async () => {
 
   const out = await createSale(db, {
     ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 28000 }],
     items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
       overrideReason: 'descuento autorizado' }]
   })
@@ -116,4 +118,29 @@ it('un encargado guarda precio de lista, aplicado y motivo', async () => {
     overrideReason: 'descuento autorizado',
     overrideUserId: 'u1'
   })
+})
+
+it('guarda dos pagos y exige que sumen el total', async () => {
+  const db = await seed()
+  const item = baseInput().items[0]
+  const out = await createSale(db, {
+    ...baseInput(),
+    items: [{ ...item, quantity: 1, unitPricePesos: 20000, catalogUnitPricePesos: 20000 }],
+    payments: [
+      { method: 'CASH', amountPesos: 12000 },
+      { method: 'CARD', amountPesos: 8000 }
+    ]
+  })
+
+  expect(await db.payments.where('saleId').equals(out.saleId).count()).toBe(2)
+})
+
+it('rechaza pagos que no suman el total', async () => {
+  const db = await seed()
+
+  await expect(createSale(db, {
+    ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 19000 }]
+  })).rejects.toThrow(/suman|total/i)
+  expect(await db.sales.count()).toBe(0)
 })

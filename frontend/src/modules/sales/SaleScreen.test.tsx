@@ -202,3 +202,36 @@ it('el cajero no ve el cambio de precio', async () => {
 
   expect(screen.queryByRole('button', { name: /cambiar precio/i })).not.toBeInTheDocument()
 })
+
+it('divide el pago entre efectivo y tarjeta', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'PAPAS AMARILLA', categoryName: 'ENTRADAS', kind: 'PRODUCT',
+    pricePesos: 7000, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], components: []
+  })
+  const create = vi.fn().mockResolvedValue({
+    saleId: 's1', displayCode: 'ALM-A-000001', totalPesos: 7000
+  })
+
+  renderScreen({ database: db, onCreateSale: create })
+  await userEvent.click(await screen.findByRole('button', { name: /papas amarilla/i }))
+  await userEvent.click(screen.getByRole('button', { name: /dividir pago/i }))
+
+  const firstAmount = screen.getByLabelText(/monto del pago 1/i)
+  await userEvent.clear(firstAmount)
+  await userEvent.type(firstAmount, '4000')
+
+  await userEvent.selectOptions(screen.getByLabelText(/medio del nuevo pago/i), 'CARD')
+  await userEvent.type(screen.getByLabelText(/monto del nuevo pago/i), '3000')
+  await userEvent.click(screen.getByRole('button', { name: /agregar pago/i }))
+
+  expect(screen.getByText(/restante \$0/i)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
+
+  expect(create.mock.calls[0][0].payments).toEqual([
+    { method: 'CASH', amountPesos: 4000 },
+    { method: 'CARD', amountPesos: 3000 }
+  ])
+})

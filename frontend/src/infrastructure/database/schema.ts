@@ -52,7 +52,7 @@ export interface SaleRow {
   status: 'CHARGED' | 'REFUNDED'
   totalPesos: number
   type: 'COUNTER' | 'DELIVERY' | 'DINE_IN'
-  method: 'CASH' | 'CARD' | 'BREB'
+  method?: 'CASH' | 'CARD' | 'BREB'
   operationalDate: string
   createdAt: string
   shiftId: string

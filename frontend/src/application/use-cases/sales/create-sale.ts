@@ -16,12 +16,17 @@ export interface SaleItemInput {
   components: ComponentRow[]
 }
 
+export interface SalePaymentInput {
+  method: 'CASH' | 'CARD' | 'BREB'
+  amountPesos: number
+}
+
 export interface SaleInput {
   type: 'COUNTER' | 'DELIVERY' | 'DINE_IN'
   tableLabel?: string | null
   deliveryFeePesos?: number
   items: SaleItemInput[]
-  method: 'CASH' | 'CARD' | 'BREB'
+  payments: SalePaymentInput[]
 }
 
 export interface CreatedSale {
@@ -96,6 +101,19 @@ export async function createSale(
   const now = deps.now ?? new Date()
   const totalPesos = input.items.reduce((sum, item) => sum + lineTotal(item), 0)
     + (input.deliveryFeePesos ?? 0)
+  if (!input.payments || input.payments.length === 0) {
+    throw new Error('La venta necesita al menos un pago')
+  }
+  let paid = 0
+  for (const payment of input.payments) {
+    if (payment.amountPesos < 0 || (totalPesos > 0 && payment.amountPesos === 0)) {
+      throw new Error('Cada pago debe ser mayor que cero')
+    }
+    paid += payment.amountPesos
+  }
+  if (paid !== totalPesos) {
+    throw new Error('Los pagos no suman el total de la venta')
+  }
 
   const created = await database.transaction(
     'rw',
@@ -114,7 +132,6 @@ export async function createSale(
         status: 'CHARGED',
         totalPesos,
         type: input.type,
-        method: input.method,
         operationalDate,
         createdAt,
         shiftId: shift.id,
@@ -143,12 +160,12 @@ export async function createSale(
           }
         })
       )
-      await database.payments.add({
+      await database.payments.bulkAdd(input.payments.map((payment) => ({
         id: crypto.randomUUID(),
         saleId,
-        method: input.method,
-        amountPesos: totalPesos
-      })
+        method: payment.method,
+        amountPesos: payment.amountPesos
+      })))
       await database.operations.add({
         operationId: crypto.randomUUID(),
         seq: operationSeq,
@@ -163,7 +180,7 @@ export async function createSale(
           tableLabel: input.tableLabel ?? null,
           deliveryFeePesos: input.deliveryFeePesos ?? 0,
           shiftId: shift.id,
-          method: input.method,
+          payments: input.payments,
           displayCode,
           deviceSeq,
           items: input.items.map((item) => ({

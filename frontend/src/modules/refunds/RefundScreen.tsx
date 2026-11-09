@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db, type SaleRow } from '../../infrastructure/database/schema'
-import { refundSale } from '../../application/use-cases/refunds/refund-sale'
+import { refundSale, type RefundInput } from '../../application/use-cases/refunds/refund-sale'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 export default function RefundScreen() {
@@ -9,6 +9,7 @@ export default function RefundScreen() {
   const [sales, setSales] = useState<SaleRow[]>([])
   const [selected, setSelected] = useState<SaleRow | null>(null)
   const [reason, setReason] = useState('')
+  const [method, setMethod] = useState<RefundInput['method']>('CASH')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -33,10 +34,11 @@ export default function RefundScreen() {
     }
     setSubmitting(true)
     try {
-      const result = await refundSale({ saleId: selected.id, reason })
+      const result = await refundSale({ saleId: selected.id, reason, method })
       setMessage(`Devolución de $${result.amountPesos.toLocaleString('es-CO')} registrada`)
       setSelected(null)
       setReason('')
+      setMethod('CASH')
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo devolver')
@@ -88,6 +90,18 @@ export default function RefundScreen() {
                 Motivo
                 <Input className="mt-1" value={reason}
                   onChange={(event) => setReason(event.target.value)} />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Medio de devolución
+                <select
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={method}
+                  onChange={(event) => setMethod(event.target.value as RefundInput['method'])}
+                >
+                  <option value="CASH">Efectivo</option>
+                  <option value="CARD">Tarjeta</option>
+                  <option value="BREB">Bre-B</option>
+                </select>
               </label>
               <div className="flex gap-2">
                 <Button onClick={onRefund} disabled={submitting}>Confirmar devolución</Button>

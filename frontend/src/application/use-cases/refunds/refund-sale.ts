@@ -5,6 +5,7 @@ import { activeUserId } from '../../../modules/auth/session'
 export interface RefundInput {
   saleId: string
   reason: string
+  method: 'CASH' | 'CARD' | 'BREB'
   userId?: string
 }
 
@@ -55,7 +56,7 @@ export async function refundSale(
         saleId: sale.id,
         shiftId: shift.id,
         amountPesos: sale.totalPesos,
-        method: sale.method,
+        method: input.method,
         reason,
         operationalDate: localDate(now)
       })
@@ -72,7 +73,7 @@ export async function refundSale(
         payload: {
           shiftId: shift.id,
           saleId: sale.id,
-          method: sale.method,
+          method: input.method,
           reason
         }
       })
