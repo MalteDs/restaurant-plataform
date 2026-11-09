@@ -52,6 +52,7 @@
 - Devoluciones: totales y con un medio elegido por el usuario; una venta con pago mixto no replica automáticamente la distribución al devolver.
 - Gastos: categorías por sede administradas por Admin, con seed Domicilios/Fruver/Insumos/Aseo/Servicios/Otros. El reporte agrupa por el texto congelado del gasto; renombrar la categoría no reescribe el histórico.
 - Compatibilidad: el endpoint de gastos conserva `category` como texto legado para clientes viejos; la UI nueva envía `expenseCategoryId`.
+- Reportes del día: la pantalla usa las ventas locales de este dispositivo y completa gastos y desglose de gastos desde el servidor. La agregación en línea de varios dispositivos no forma parte de esta iteración.
 - Pendiente previo que sigue abierto: el alta de productos/combos desde la interfaz no existe; los nuevos se crean por la API documentada. Los combos promocionales se pueden editar en Catálogo.
 
 ## Notas de la sesión

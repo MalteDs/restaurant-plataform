@@ -104,7 +104,10 @@ public class SaleApplicationService {
   }
 
   private void validatePayments(CreateSaleCommand command, long total) {
-    var lines = command.payments();
+    validatePayments(command.payments(), total);
+  }
+
+  public void validatePayments(List<CreateSaleCommand.PaymentCommand> lines, long total) {
     if (lines == null || lines.isEmpty()) {
       throw new IllegalArgumentException("La venta necesita al menos un pago");
     }

@@ -115,19 +115,15 @@ public class SyncService {
       throw new IllegalStateException("No hay turno abierto para este dispositivo");
     }
     if ("CREATE_SALE".equals(operation.type())) {
-      var overrides = new ArrayList<SaleApplicationService.PriceOverride>();
-      for (Map<String, Object> item : (List<Map<String, Object>>) payload.getOrDefault("items",
-          List.of())) {
-        var unitPrice = ((Number) item.get("unitPricePesos")).longValue();
-        var catalogPrice = item.get("catalogUnitPricePesos") == null ? unitPrice
-            : ((Number) item.get("catalogUnitPricePesos")).longValue();
-        if (unitPrice != catalogPrice) {
-          overrides.add(new SaleApplicationService.PriceOverride(unitPrice, catalogPrice,
-              (String) item.get("overrideReason")));
-        }
-      }
+      var command = toSaleCommand(operation, batch);
+      var overrides = command.items().stream()
+          .filter(item -> item.unitPricePesos() != item.catalogUnitPricePesos())
+          .map(item -> new SaleApplicationService.PriceOverride(item.unitPricePesos(),
+              item.catalogUnitPricePesos(), item.overrideReason()))
+          .toList();
       sales.validatePriceOverrides(batch.tenantId(), batch.locationId(), operation.userId(),
           overrides);
+      sales.validatePayments(command.payments(), command.totalPesos());
     }
     if ("REFUND_SALE".equals(operation.type())) {
       var refunded = jdbc.queryForObject("select count(*) from refunds where sale_id = ?",
