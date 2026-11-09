@@ -29,6 +29,7 @@ export interface ProductRow {
   active: boolean
   modifierGroupIds: string[]
   components: ComponentRow[]
+  saleDays?: number[]
 }
 
 export interface ModifierRow {
@@ -51,7 +52,7 @@ export interface SaleRow {
   status: 'CHARGED' | 'REFUNDED'
   totalPesos: number
   type: 'COUNTER' | 'DELIVERY' | 'DINE_IN'
-  method: 'CASH' | 'CARD' | 'BREB'
+  method?: 'CASH' | 'CARD' | 'BREB'
   operationalDate: string
   createdAt: string
   shiftId: string
@@ -72,6 +73,9 @@ export interface SaleItemRow {
   lineTotalPesos: number
   modifiers: ModifierRow[]
   components: ComponentRow[]
+  catalogUnitPricePesos?: number
+  overrideReason?: string | null
+  overrideUserId?: string | null
 }
 
 export interface PaymentRow {
@@ -177,6 +181,9 @@ export class CajaDb extends Dexie {
     })
     this.version(2).stores({
       operations: 'operationId, seq, status, entityId, type'
+    })
+    this.version(3).stores({
+      sales: 'id, status, operationalDate, createdAt'
     })
   }
 }

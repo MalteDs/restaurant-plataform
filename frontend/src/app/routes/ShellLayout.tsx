@@ -43,22 +43,27 @@ export function ShellLayout({ children }: { children?: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <span className="text-lg font-bold text-brand-600">Caja Karbón</span>
-          <nav className="flex flex-1 gap-1" aria-label="Navegación principal">
+          <nav
+            className="order-3 w-full overflow-x-auto lg:order-none lg:w-auto lg:flex-1"
+            aria-label="Navegación principal"
+          >
             {items.filter((item) => visibleFor(item, user?.role)).map((item) => (
               <NavItemLink key={item.to} item={item} />
             ))}
           </nav>
-          <SyncStatus />
-          <span className="text-sm text-gray-500">{user?.username}</span>
-          <Button variant="ghost" onClick={() => { lock(); navigate('/lock') }}>
-            Bloquear
-          </Button>
-          <Button variant="secondary" onClick={() => { logout(); navigate('/login') }}>
-            Salir
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <SyncStatus />
+            <span className="hidden text-sm text-gray-500 sm:inline">{user?.username}</span>
+            <Button variant="ghost" onClick={() => { lock(); navigate('/lock') }}>
+              Bloquear
+            </Button>
+            <Button variant="secondary" onClick={() => { logout(); navigate('/login') }}>
+              Salir
+            </Button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl p-4">{children ?? <Outlet />}</main>

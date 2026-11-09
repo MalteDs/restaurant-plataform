@@ -20,13 +20,13 @@ Devuelve version, 9 categorías, 75 productos con precios, modificadores y compo
 5. Crear producto (ADMIN)
 curl -X POST http://localhost:8080/api/catalog/products \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
-  -d '{"name":"Producto de prueba","categoryId":"00000000-0000-4000-8000-0000000007d3","pricePesos":12300,"costPesos":5000,"kind":"PRODUCT"}'
-Precio negativo o nombre vacío → 400. Nombre repetido → 409. Sube catalog_version.
+  -d '{"name":"Producto de prueba","categoryId":"00000000-0000-4000-8000-0000000007d3","pricePesos":12300,"costPesos":5000,"kind":"PRODUCT","saleDays":[1,2,3,4]}'
+Precio negativo o nombre vacío → 400. Nombre repetido → 409. Sube catalog_version. `saleDays` usa 1=lunes … 7=domingo; omítelo o usa [] para todos los días.
 6. Actualizar producto (ADMIN)
 curl -X PUT http://localhost:8080/api/catalog/products/<PRODUCT_ID> \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
-  -d '{"name":"Producto actualizado","pricePesos":13000,"active":false}'
-Es actualización parcial: lo que omites no se borra (incluido costPesos).
+  -d '{"name":"Producto actualizado","pricePesos":13000,"active":false,"saleDays":[]}'
+Es actualización parcial: lo que omites no se borra (incluido costPesos). `saleDays: []` limpia los días y deja el producto disponible todos los días.
 7. Crear categoría (ADMIN)
 curl -X POST http://localhost:8080/api/catalog/categories \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
@@ -60,8 +60,8 @@ Guarda el shiftId de result. seq debe ser consecutivo por dispositivo y empezar 
 14. Sync — crear venta (seq 2)
 curl -X POST http://localhost:8080/api/sync/operations \
   -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
-  -d '{"operations":[{"operationId":"22222222-2222-4222-8222-222222222222","seq":2,"type":"CREATE_SALE","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:05:00Z","payload":{"type":"COUNTER","shiftId":"<SHIFT_ID>","method":"CASH","deliveryFeePesos":0,"displayCode":"ALM-A-000001","deviceSeq":1,"items":[{"productId":"00000000-0000-4000-8000-000000000bc4","productName":"SENCILLA","categoryName":"HAMBURGUESAS","quantity":2,"unitPricePesos":16500,"costPesos":null,"note":null,"modifiers":[],"components":[]}]}}]}'
-Total esperado: 33000. Repetir exactamente la misma operación devuelve DUPLICATE y no duplica la venta.
+  -d '{"operations":[{"operationId":"22222222-2222-4222-8222-222222222222","seq":2,"type":"CREATE_SALE","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:05:00Z","payload":{"type":"COUNTER","shiftId":"<SHIFT_ID>","payments":[{"method":"CASH","amountPesos":12000},{"method":"CARD","amountPesos":21000}],"deliveryFeePesos":0,"displayCode":"ALM-A-000001","deviceSeq":1,"items":[{"productId":"00000000-0000-4000-8000-000000000bc4","productName":"SENCILLA","categoryName":"HAMBURGUESAS","quantity":2,"unitPricePesos":16500,"catalogUnitPricePesos":16500,"overrideReason":null,"costPesos":null,"note":null,"modifiers":[],"components":[]}]}}]}'
+La suma de `payments` debe ser igual al total (33000). `method` solo se acepta en operaciones antiguas y equivale a un pago único por el total. Para un cambio de precio, `unitPricePesos` difiere de `catalogUnitPricePesos` y `overrideReason` es obligatorio (5–200 caracteres); el usuario debe ser MANAGER o ADMIN.
 15. Sync — devolución completa (seq 3)
 curl -X POST http://localhost:8080/api/sync/operations \
   -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
@@ -75,12 +75,12 @@ Devuelve expectedPesos y differencePesos.
 17. Resumen del día
 curl "http://localhost:8080/api/reports/summary?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
-Ventas brutas, devoluciones, neto, efectivo/tarjeta/Bre-B, costo, gastos, utilidad operativa, ticket promedio y desgloses por día/hora/producto.
+Ventas brutas, devoluciones, neto, efectivo/tarjeta/Bre-B, costo, gastos, utilidad operativa, ticket promedio y desgloses por día/hora/producto. Incluye `byExpenseCategory` con el total de gastos por categoría.
 18. Registrar gasto (MANAGER o ADMIN)
 curl -X POST http://localhost:8080/api/expenses \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
-  -d '{"category":"Transporte","description":"Taxi","amountPesos":10000,"expenseDate":"2026-11-07"}'
-Un CASHIER recibe 403.
+  -d '{"expenseCategoryId":"<CATEGORY_ID>","description":"Taxi","amountPesos":10000,"expenseDate":"2026-11-07"}'
+Un CASHIER recibe 403. La categoría debe existir y estar activa.
 19. Listar gastos (MANAGER o ADMIN)
 curl "http://localhost:8080/api/expenses?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
@@ -88,3 +88,17 @@ curl "http://localhost:8080/api/expenses?from=2026-11-07&to=2026-11-07" \
 curl "http://localhost:8080/api/audit?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
 Registra devoluciones, cierres, gastos y cambios de catálogo.
+21. Listar categorías de gasto (MANAGER o ADMIN)
+curl http://localhost:8080/api/expenses/categories \
+  -H "Authorization: Bearer <TOKEN>"
+Devuelve id, nombre, orden y estado activo.
+22. Crear categoría de gasto (ADMIN)
+curl -X POST http://localhost:8080/api/expenses/categories \
+  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
+  -d '{"name":"Domicilios"}'
+Nombre repetido → 409.
+23. Activar o renombrar categoría de gasto (ADMIN)
+curl -X PUT http://localhost:8080/api/expenses/categories/<CATEGORY_ID> \
+  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
+  -d '{"name":"Domicilios","active":false}'
+Una categoría inactiva no se puede usar en gastos nuevos. El gasto conserva el nombre con el que se registró.

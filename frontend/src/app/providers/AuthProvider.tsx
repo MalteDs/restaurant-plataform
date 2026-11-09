@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { request } from '../../infrastructure/api/client'
+import { request, SESSION_EXPIRED_EVENT } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
 import { activeUserId, saveOfflineSession, unlockOfflineSession } from '../../modules/auth/session'
 import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
@@ -86,6 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(refreshCatalog, 30 * 60_000)
     return () => window.clearInterval(timer)
   }, [user])
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      setUser(null)
+      setLocked(false)
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+  }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem(USER_KEY)

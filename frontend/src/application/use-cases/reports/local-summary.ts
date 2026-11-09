@@ -17,6 +17,7 @@ export interface LocalSummary {
   byDay: Array<{ date: string; salesPesos: number }>
   byHour: Array<{ hour: number; salesPesos: number }>
   byProduct: Array<{ name: string; quantity: number; salesPesos: number }>
+  byExpenseCategory: Array<{ name: string; amountPesos: number }>
 }
 
 function hourInBogota(iso: string): number {
@@ -108,7 +109,33 @@ export async function localSummary(
     byCategory,
     byDay,
     byHour,
-    byProduct
+    byProduct,
+    byExpenseCategory: []
+  }
+}
+
+export async function dailySummary(
+  database: CajaDb,
+  date: string,
+  loadRemoteExpenses?: () => Promise<{
+    expensesPesos: number
+    byExpenseCategory?: Array<{ name: string; amountPesos: number }>
+  }>
+): Promise<LocalSummary> {
+  const local = await localSummary(database, date, date)
+  if (!loadRemoteExpenses) {
+    return local
+  }
+  try {
+    const { expensesPesos, byExpenseCategory } = await loadRemoteExpenses()
+    return {
+      ...local,
+      expensesPesos,
+      byExpenseCategory: byExpenseCategory ?? [],
+      operatingProfitPesos: local.netSalesPesos - local.costPesos - expensesPesos
+    }
+  } catch {
+    return local
   }
 }
 

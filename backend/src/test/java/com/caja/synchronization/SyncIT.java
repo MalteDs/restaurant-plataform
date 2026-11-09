@@ -94,6 +94,69 @@ class SyncIT {
     assertEquals(0, countSales(ctx));
   }
 
+  @Test void cashierCannotOverridePriceThroughSync() throws Exception {
+    var ctx = fixture();
+    var operation = saleOperation(ctx, "op-override-cashier", 1, 14000, 16500,
+        "descuento autorizado", Instant.now());
+
+    var result = push(ctx, List.of(operation));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, countSales(ctx));
+  }
+
+  @Test void managerOverrideThroughSyncIsApplied() throws Exception {
+    var ctx = fixture();
+    jdbc.update("update users set role = 'MANAGER' where id = ?", ctx.userId());
+    var operation = saleOperation(ctx, "op-override-manager", 1, 14000, 16500,
+        "descuento autorizado", Instant.now());
+
+    var result = push(ctx, List.of(operation));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(14000L, jdbc.queryForObject("select unit_price_pesos from sale_items where sale_id = "
+        + "(select id from sales where tenant_id = ?)", Long.class, ctx.tenantId()));
+    assertEquals(16500L, jdbc.queryForObject(
+        "select catalog_unit_price_pesos from sale_items where sale_id = "
+            + "(select id from sales where tenant_id = ?)", Long.class, ctx.tenantId()));
+  }
+
+  @Test void legacySaleWithoutOverrideFieldsStillApplies() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(saleOperation(ctx, "op-legacy", 1, 16500, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(16500L, jdbc.queryForObject(
+        "select catalog_unit_price_pesos from sale_items where sale_id = "
+            + "(select id from sales where tenant_id = ?)", Long.class, ctx.tenantId()));
+  }
+
+  @Test void splitPaymentsThroughSyncAreApplied() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(splitSaleOperation(ctx, "op-split", 1, 20000, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(2, jdbc.queryForObject("select count(*) from payments where sale_id = "
+        + "(select id from sales where tenant_id = ?)", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void paymentMismatchIsRejectedAndBatchContinues() throws Exception {
+    var ctx = fixture();
+    var bad = push(ctx, List.of(splitSaleOperation(ctx, "op-bad-pay", 1, 20000, 12000, 7000,
+        Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(bad.get(0)));
+    assertEquals(0, countSales(ctx));
+    assertEquals(1, jdbc.queryForObject("select count(*) from sync_operations "
+            + "where operation_id = ? and applied_at is null", Integer.class,
+        UUID.nameUUIDFromBytes("op-bad-pay".getBytes(StandardCharsets.UTF_8))));
+
+    var good = push(ctx, List.of(splitSaleOperation(ctx, "op-good-after", 2, 20000,
+        Instant.now())));
+    assertEquals("APPLIED", syncStatus(good.get(0)));
+    assertEquals(1, countSales(ctx));
+  }
+
   @Test void twoHundredRetriesDoNotDuplicateTheSale() throws Exception {
     var ctx = fixture();
     var operation = saleOperation(ctx, "op-200", 1, 16500, Instant.now());
@@ -141,8 +204,26 @@ class SyncIT {
 
   private SyncOperation saleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
                                       Instant clientCreatedAt) {
+    return saleOperation(ctx, operationId, seq, unitPrice, unitPrice, null, clientCreatedAt);
+  }
+
+  private SyncOperation saleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
+                                      long catalogPrice, String overrideReason,
+                                      Instant clientCreatedAt) {
     var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
     var saleId = UUID.randomUUID();
+    var item = new java.util.HashMap<String, Object>();
+    item.put("productId", ctx.productId().toString());
+    item.put("productName", "SENCILLA");
+    item.put("categoryName", "HAMBURGUESAS");
+    item.put("quantity", 1);
+    item.put("unitPricePesos", unitPrice);
+    item.put("modifiers", List.of());
+    item.put("components", List.of());
+    if (overrideReason != null) {
+      item.put("catalogUnitPricePesos", catalogPrice);
+      item.put("overrideReason", overrideReason);
+    }
     return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
         Map.of(
             "type", "COUNTER",
@@ -151,14 +232,38 @@ class SyncIT {
             "deliveryFeePesos", 0,
             "displayCode", "ALM-A-" + String.format("%06d", seq),
             "deviceSeq", seq,
-            "items", List.of(Map.of(
-                "productId", ctx.productId().toString(),
-                "productName", "SENCILLA",
-                "categoryName", "HAMBURGUESAS",
-                "quantity", 1,
-                "unitPricePesos", unitPrice,
-                "modifiers", List.of(),
-                "components", List.of()))));
+            "items", List.of(item)));
+  }
+
+  private SyncOperation splitSaleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
+                                           Instant clientCreatedAt) {
+    return splitSaleOperation(ctx, operationId, seq, unitPrice, 12000, 8000, clientCreatedAt);
+  }
+
+  private SyncOperation splitSaleOperation(Ctx ctx, String operationId, long seq, long unitPrice,
+                                           long cashPesos, long cardPesos,
+                                           Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var saleId = UUID.randomUUID();
+    var item = new java.util.HashMap<String, Object>();
+    item.put("productId", ctx.productId().toString());
+    item.put("productName", "SENCILLA");
+    item.put("categoryName", "HAMBURGUESAS");
+    item.put("quantity", 1);
+    item.put("unitPricePesos", unitPrice);
+    item.put("modifiers", List.of());
+    item.put("components", List.of());
+    return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
+        Map.of(
+            "type", "COUNTER",
+            "shiftId", ctx.shiftId().toString(),
+            "deliveryFeePesos", 0,
+            "displayCode", "ALM-A-" + String.format("%06d", seq),
+            "deviceSeq", seq,
+            "items", List.of(item),
+            "payments", List.of(
+                Map.of("method", "CASH", "amountPesos", cashPesos),
+                Map.of("method", "CARD", "amountPesos", cardPesos))));
   }
 
   private String syncStatus(Map<String, Object> result) {

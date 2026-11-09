@@ -2,6 +2,7 @@ package com.caja.reports;
 
 import com.caja.reports.Summary.CategoryRow;
 import com.caja.reports.Summary.DayRow;
+import com.caja.reports.Summary.ExpenseCategoryRow;
 import com.caja.reports.Summary.HourRow;
 import com.caja.reports.Summary.ProductRow;
 import java.time.LocalDate;
@@ -99,9 +100,18 @@ public class ReportService {
         """, (rs, rowNum) -> new CategoryRow(rs.getString("category_name"),
         rs.getLong("quantity"), rs.getLong("total")), tenantId, locationId, from, to);
 
+    var byExpenseCategory = jdbc.query("""
+        select category, coalesce(sum(amount_pesos), 0) as total
+        from expenses
+        where tenant_id = ? and location_id = ? and expense_date between ? and ?
+        group by category
+        order by total desc
+        """, (rs, rowNum) -> new ExpenseCategoryRow(rs.getString("category"),
+        rs.getLong("total")), tenantId, locationId, from, to);
+
     return new Summary(salesPesos, refundsPesos, netSalesPesos, cashPesos, cardPesos, brebPesos,
         orders, refundCount, averageTicket, costPesos, expensesPesos, profit, byCategory,
-        byDay, byHour, byProduct);
+        byDay, byHour, byProduct, byExpenseCategory);
   }
 
   private long methodTotal(UUID tenantId, UUID locationId, LocalDate from, LocalDate to,

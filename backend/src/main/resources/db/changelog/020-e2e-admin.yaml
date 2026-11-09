@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-e2e-admin
+      author: caja
+      context: e2e
+      changes:
+        - sql:
+            sql: |
+              insert into users(id, tenant_id, location_id, username, password_hash, role)
+              values (gen_random_uuid(),
+                      '00000000-0000-4000-8000-0000000003e9',
+                      '00000000-0000-4000-8000-0000000003ea',
+                      'admin',
+                      '$2b$10$1.4NaIDIr9xk6AEoK7JjXO6jJHGR3Y0Qox/ddtGy2l.WmXCvInadq',
+                      'ADMIN')
+              on conflict (tenant_id, username) do nothing;

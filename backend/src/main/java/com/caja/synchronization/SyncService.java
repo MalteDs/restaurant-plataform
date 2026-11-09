@@ -114,6 +114,17 @@ public class SyncService {
     if (open == null || open == 0) {
       throw new IllegalStateException("No hay turno abierto para este dispositivo");
     }
+    if ("CREATE_SALE".equals(operation.type())) {
+      var command = toSaleCommand(operation, batch);
+      var overrides = command.items().stream()
+          .filter(item -> item.unitPricePesos() != item.catalogUnitPricePesos())
+          .map(item -> new SaleApplicationService.PriceOverride(item.unitPricePesos(),
+              item.catalogUnitPricePesos(), item.overrideReason()))
+          .toList();
+      sales.validatePriceOverrides(batch.tenantId(), batch.locationId(), operation.userId(),
+          overrides);
+      sales.validatePayments(command.payments(), command.totalPesos());
+    }
     if ("REFUND_SALE".equals(operation.type())) {
       var refunded = jdbc.queryForObject("select count(*) from refunds where sale_id = ?",
           Integer.class, uuid(payload.get("saleId")));
@@ -191,18 +202,34 @@ public class SyncService {
         components.add(new CreateSaleCommand.ComponentCommand(uuid(component.get("productId")),
             (String) component.get("name"), ((Number) component.get("quantity")).intValue()));
       }
+      var unitPrice = ((Number) item.get("unitPricePesos")).longValue();
+      var catalogPrice = item.get("catalogUnitPricePesos") == null ? unitPrice
+          : ((Number) item.get("catalogUnitPricePesos")).longValue();
       items.add(new CreateSaleCommand.ItemCommand(uuid(item.get("productId")),
           (String) item.get("productName"), (String) item.get("categoryName"),
-          ((Number) item.get("quantity")).intValue(),
-          ((Number) item.get("unitPricePesos")).longValue(),
+          ((Number) item.get("quantity")).intValue(), unitPrice,
           item.get("costPesos") == null ? null : ((Number) item.get("costPesos")).longValue(),
-          (String) item.get("note"), modifiers, components));
+          (String) item.get("note"), modifiers, components, catalogPrice,
+          (String) item.get("overrideReason")));
+    }
+    var deliveryFee = ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue();
+    var payments = new ArrayList<CreateSaleCommand.PaymentCommand>();
+    var rawPayments = (List<Map<String, Object>>) payload.get("payments");
+    if (rawPayments != null && !rawPayments.isEmpty()) {
+      for (Map<String, Object> payment : rawPayments) {
+        payments.add(new CreateSaleCommand.PaymentCommand(
+            PaymentMethod.valueOf((String) payment.get("method")),
+            ((Number) payment.get("amountPesos")).longValue()));
+      }
+    } else {
+      payments.add(new CreateSaleCommand.PaymentCommand(
+          PaymentMethod.valueOf((String) payload.get("method")),
+          CreateSaleCommand.totalOf(items, deliveryFee)));
     }
     return new CreateSaleCommand(operation.entityId(), batch.tenantId(), batch.locationId(),
         batch.deviceId(), operation.userId(), uuid(payload.get("shiftId")),
         SaleType.valueOf((String) payload.get("type")), (String) payload.get("tableLabel"),
-        ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue(), items,
-        PaymentMethod.valueOf((String) payload.get("method")), operation.operationId(),
+        deliveryFee, items, payments, operation.operationId(),
         (String) payload.get("displayCode"),
         ((Number) payload.get("deviceSeq")).longValue(), operation.clientCreatedAt());
   }

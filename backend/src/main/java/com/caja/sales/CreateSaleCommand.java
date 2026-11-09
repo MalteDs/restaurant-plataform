@@ -9,38 +9,57 @@ import java.util.UUID;
 public record CreateSaleCommand(UUID saleId, UUID tenantId, UUID locationId, UUID deviceId,
                                 UUID userId, UUID shiftId, SaleType type, String tableLabel,
                                 long deliveryFeePesos,
-                                List<ItemCommand> items, PaymentMethod method, UUID operationId,
-                                String displayCode, long deviceSeq, Instant clientCreatedAt) {
+                                List<ItemCommand> items, List<PaymentCommand> payments,
+                                UUID operationId, String displayCode, long deviceSeq,
+                                Instant clientCreatedAt) {
 
   public CreateSaleCommand withType(SaleType newType) {
     return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, newType,
-        tableLabel, deliveryFeePesos, items, method, operationId, displayCode, deviceSeq,
+        tableLabel, deliveryFeePesos, items, payments, operationId, displayCode, deviceSeq,
         clientCreatedAt);
   }
 
   public CreateSaleCommand withTableLabel(String label) {
     return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, label,
-        deliveryFeePesos, items, method, operationId, displayCode, deviceSeq, clientCreatedAt);
+        deliveryFeePesos, items, payments, operationId, displayCode, deviceSeq, clientCreatedAt);
   }
 
   public CreateSaleCommand withDeliveryFee(long feePesos) {
     return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
-        feePesos, items, method, operationId, displayCode, deviceSeq, clientCreatedAt);
+        feePesos, items, payments, operationId, displayCode, deviceSeq, clientCreatedAt);
   }
 
   public CreateSaleCommand withItems(List<ItemCommand> newItems) {
     return new CreateSaleCommand(saleId, tenantId, locationId, deviceId, userId, shiftId, type, tableLabel,
-        deliveryFeePesos, newItems, method, operationId, displayCode, deviceSeq, clientCreatedAt);
+        deliveryFeePesos, newItems, payments, operationId, displayCode, deviceSeq, clientCreatedAt);
+  }
+
+  public long totalPesos() {
+    return totalOf(items, deliveryFeePesos);
+  }
+
+  public static long totalOf(List<ItemCommand> items, long deliveryFeePesos) {
+    return items.stream().mapToLong(CreateSaleCommand::lineTotal).sum() + deliveryFeePesos;
+  }
+
+  public static long lineTotal(ItemCommand item) {
+    var modifiers = item.modifiers().stream()
+        .mapToLong(ModifierCommand::additionalPricePesos).sum();
+    return (long) item.quantity() * (item.unitPricePesos() + modifiers);
   }
 
   public record ItemCommand(UUID productId, String productName, String categoryName, int quantity,
                             long unitPricePesos, Long costPesos, String note,
-                            List<ModifierCommand> modifiers, List<ComponentCommand> components) {
+                            List<ModifierCommand> modifiers, List<ComponentCommand> components,
+                            long catalogUnitPricePesos, String overrideReason) {
   }
 
   public record ModifierCommand(UUID modifierId, String modifierName, long additionalPricePesos) {
   }
 
   public record ComponentCommand(UUID productId, String name, int quantity) {
+  }
+
+  public record PaymentCommand(PaymentMethod method, long amountPesos) {
   }
 }

@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -45,7 +46,7 @@ public class CatalogController {
       @AuthenticationPrincipal AuthenticatedUser user) {
     var id = catalog.createProduct(new TenantId(user.tenantId()), user.locationId(),
         request.name(), request.categoryId(), request.pricePesos(), request.costPesos(),
-        request.kind() == null ? "PRODUCT" : request.kind());
+        request.kind() == null ? "PRODUCT" : request.kind(), request.saleDays());
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
   }
 
@@ -55,7 +56,8 @@ public class CatalogController {
                                             @Valid @RequestBody ProductUpdate request,
                                             @AuthenticationPrincipal AuthenticatedUser user) {
     catalog.updateProduct(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
-        request.categoryId(), request.pricePesos(), request.costPesos(), request.active());
+        request.categoryId(), request.pricePesos(), request.costPesos(), request.active(),
+        request.saleDays());
     return ResponseEntity.noContent().build();
   }
 
@@ -109,14 +111,16 @@ public class CatalogController {
                                UUID categoryId,
                                @NotNull @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
-                               @Pattern(regexp = "PRODUCT|COMBO") String kind) {
+                               @Pattern(regexp = "PRODUCT|COMBO") String kind,
+                               List<@NotNull @Min(1) @Max(7) Integer> saleDays) {
   }
 
   public record ProductUpdate(@Size(max = 100) String name,
                                UUID categoryId,
                                @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
-                               Boolean active) {
+                               Boolean active,
+                               List<@NotNull @Min(1) @Max(7) Integer> saleDays) {
   }
 
   public record CategoryRequest(@NotBlank @Size(max = 100) String name, Integer sortOrder) {

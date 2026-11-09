@@ -1,29 +1,25 @@
 import { useEffect, useState } from 'react'
 import { db } from '../../infrastructure/database/schema'
 import { request } from '../../infrastructure/api/client'
-import { exportSummaryCsv, localSummary, type LocalSummary } from '../../application/use-cases/reports/local-summary'
+import { dailySummary, exportSummaryCsv, type LocalSummary } from '../../application/use-cases/reports/local-summary'
+import { bogotaDate } from '../../shared/dates'
 import ExpensesScreen from '../expenses/ExpensesScreen'
 import { Button, Card, PageHeader } from '../../shared/ui'
 
 export default function ReportsScreen() {
   const [summary, setSummary] = useState<LocalSummary | null>(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bogotaDate()
 
   useEffect(() => {
-    async function load() {
-      if (navigator.onLine) {
-        try {
-          // Online reports come from the server so expenses and costs match exactly.
-          setSummary(await request<LocalSummary>(`/api/reports/summary?from=${today}&to=${today}`))
-          return
-        } catch {
-          // Fall back to the local summary when the server is unreachable.
-        }
-      }
-      setSummary(await localSummary(db, today, today))
-    }
-    void load()
+    // Today's sales live in the local DB; the server may lag until sync finishes.
+    const loadRemoteExpenses = navigator.onLine
+      ? () =>
+          navigator.onLine
+            ? request<LocalSummary>(`/api/reports/summary?from=${today}&to=${today}`)
+            : Promise.reject(new Error('sin conexión'))
+      : undefined
+    void dailySummary(db, today, loadRemoteExpenses).then(setSummary)
   }, [today])
 
   function onExport() {
@@ -72,6 +68,20 @@ export default function ReportsScreen() {
               </li>
             ))}
           </ul>
+          {summary.byExpenseCategory.length > 0 ? (
+            <>
+              <h3 className="mt-5 text-sm font-semibold text-gray-900">Gastos por categoría</h3>
+              <ul className="mt-2 text-sm">
+                {summary.byExpenseCategory.map((row) => (
+                  <li key={row.name}
+                    className="flex justify-between border-t border-gray-100 py-1">
+                    <span>{row.name}</span>
+                    <span>${row.amountPesos.toLocaleString('es-CO')}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <Button className="mt-4" variant="ghost" onClick={onExport}>Exportar CSV</Button>
         </Card>
       ) : (

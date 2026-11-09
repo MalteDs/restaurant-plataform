@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../infrastructure/api/client'
+import { formatSaleDays, parseSaleDaysInput } from '../sales/sale-days'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 interface Product {
@@ -9,12 +10,14 @@ interface Product {
   pricePesos: number
   costPesos: number | null
   active: boolean
+  saleDays?: number[]
 }
 
 export default function CatalogScreen() {
   const online = navigator.onLine
   const [products, setProducts] = useState<Product[]>([])
   const [prices, setPrices] = useState<Record<string, string>>({})
+  const [days, setDays] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
 
   async function refresh() {
@@ -35,6 +38,7 @@ export default function CatalogScreen() {
         method: 'PUT',
         body: JSON.stringify({
           pricePesos: Number(prices[product.id] ?? product.pricePesos),
+          saleDays: parseSaleDaysInput(days[product.id] ?? formatSaleDays(product.saleDays)),
           active
         })
       })
@@ -58,6 +62,7 @@ export default function CatalogScreen() {
               <th className="pb-2">Producto</th>
               <th className="pb-2">Categoría</th>
               <th className="pb-2">Precio</th>
+              <th className="pb-2">Días</th>
               <th className="pb-2">Activo</th>
               <th className="pb-2" />
             </tr>
@@ -76,6 +81,14 @@ export default function CatalogScreen() {
                   />
                 </td>
                 <td className="py-2">
+                  <Input
+                    className="w-24"
+                    placeholder="todos"
+                    value={days[product.id] ?? formatSaleDays(product.saleDays)}
+                    onChange={(event) => setDays({ ...days, [product.id]: event.target.value })}
+                  />
+                </td>
+                <td className="py-2">
                   <input type="checkbox" checked={product.active}
                     onChange={(event) => void save(product, event.target.checked)} />
                 </td>
@@ -86,6 +99,9 @@ export default function CatalogScreen() {
             ))}
           </tbody>
         </table>
+        <p className="mt-3 text-xs text-gray-500">
+          Días: 1=lunes … 7=domingo, separados por coma; vacío=todos.
+        </p>
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </Card>
     </div>

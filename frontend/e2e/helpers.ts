@@ -23,6 +23,10 @@ export async function registerDevice(page: Page, code = 'A') {
   await expect(page.getByText(/Token \(guárdalo/i)).toBeVisible({ timeout: 10_000 })
 }
 
+export function uniqueDeviceCode(prefix: string): string {
+  return `${prefix}${Date.now().toString().slice(-6)}`
+}
+
 export async function openShift(page: Page, amount: number) {
   await page.getByRole('link', { name: /^caja$/i }).click()
   await page.getByLabel(/fondo inicial/i).fill(String(amount))
@@ -30,16 +34,20 @@ export async function openShift(page: Page, amount: number) {
   await expect(page.getByText(/turno abierto/i)).toBeVisible({ timeout: 10_000 })
 }
 
-export async function sell(page: Page, product: string) {
-  await page.getByRole('link', { name: /^venta$/i }).click()
-  await page.getByRole('button', { name: new RegExp(product, 'i') }).first().click()
+export async function confirmAddIfPresent(page: Page) {
   const add = page.getByRole('button', { name: /^agregar$/i })
   await add.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined)
   if (await add.isVisible().catch(() => false)) {
     await add.click()
   }
+}
+
+export async function sell(page: Page, product: string) {
+  await page.getByRole('link', { name: /^venta$/i }).click()
+  await page.getByRole('button', { name: new RegExp(product, 'i') }).first().click()
+  await confirmAddIfPresent(page)
   await page.getByRole('button', { name: /^cobrar$/i }).click()
-  await expect(page.getByText(/venta ALM-[A-Z]-\d+ guardada/i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/venta ALM-[A-Z0-9]+-\d+ guardada/i)).toBeVisible({ timeout: 10_000 })
 }
 
 export async function closeShift(page: Page, counted: number) {

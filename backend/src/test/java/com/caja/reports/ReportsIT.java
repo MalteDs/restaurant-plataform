@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -96,6 +97,67 @@ class ReportsIT {
     saleWithCost(ctx, 9000, 1, 9000, "REFUNDED");
 
     assertEquals(10000, summary(ctx).get("costPesos"));
+  }
+
+  @Test void expenseRequiresAnActiveCategory() throws Exception {
+    var ctx = fixture();
+    var categoryId = createCategory(ctx, "Domicilios", "admin_categorias");
+
+    mvc.perform(post("/api/expenses").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "gerente_categorias", "MANAGER"))
+            .content(json.writeValueAsString(Map.of("expenseCategoryId", categoryId,
+                "description", "Domicilio", "amountPesos", 10000))))
+        .andExpect(status().isCreated());
+
+    mvc.perform(put("/api/expenses/categories/" + categoryId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "admin_categorias", "ADMIN"))
+            .content(json.writeValueAsString(Map.of("active", false))))
+        .andExpect(status().isNoContent());
+
+    mvc.perform(post("/api/expenses").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "gerente_categorias", "MANAGER"))
+            .content(json.writeValueAsString(Map.of("expenseCategoryId", categoryId,
+                "description", "Otro", "amountPesos", 5000))))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test void legacyCategoryTextStillWorks() throws Exception {
+    var ctx = fixture();
+
+    mvc.perform(post("/api/expenses").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "gerente_legacy", "MANAGER"))
+            .content(json.writeValueAsString(Map.of("category", "Transporte",
+                "description", "Taxi", "amountPesos", 1000))))
+        .andExpect(status().isCreated());
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test void summaryGroupsExpensesByFrozenCategoryName() throws Exception {
+    var ctx = fixture();
+    var categoryId = createCategory(ctx, "Fruver", "admin_categorias");
+
+    mvc.perform(post("/api/expenses").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "gerente_fruver", "MANAGER"))
+            .content(json.writeValueAsString(Map.of("expenseCategoryId", categoryId,
+                "description", "Lechuga", "amountPesos", 5000))))
+        .andExpect(status().isCreated());
+    expense(ctx, 10000);
+
+    mvc.perform(put("/api/expenses/categories/" + categoryId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, "admin_categorias", "ADMIN"))
+            .content(json.writeValueAsString(Map.of("name", "Mercado"))))
+        .andExpect(status().isNoContent());
+
+    var grouped = (java.util.List<Map<String, Object>>) summary(ctx).get("byExpenseCategory");
+    assertEquals(5000, ((Number) grouped.stream()
+        .filter(row -> "Fruver".equals(row.get("name"))).findFirst().orElseThrow()
+        .get("amountPesos")).longValue());
+    assertEquals(10000, ((Number) grouped.stream()
+        .filter(row -> "Transporte".equals(row.get("name"))).findFirst().orElseThrow()
+        .get("amountPesos")).longValue());
+    assertTrue(grouped.stream().noneMatch(row -> "Mercado".equals(row.get("name"))));
   }
 
   @Test void refundsAndExpensesAreAudited() throws Exception {
@@ -203,6 +265,15 @@ class ReportsIT {
         UUID.class, ctx.tenantId(), amountPesos);
     shifts.applyRefund(new RefundCommand(ctx.tenantId(), ctx.locationId(), ctx.deviceId(),
         ctx.userId(), ctx.shiftId(), saleId, "CASH", "prueba", Instant.now()));
+  }
+
+  private UUID createCategory(Ctx ctx, String name, String adminUsername) throws Exception {
+    var body = mvc.perform(post("/api/expenses/categories").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + token(ctx, adminUsername, "ADMIN"))
+            .content(json.writeValueAsString(Map.of("name", name))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
   }
 
   private void expense(Ctx ctx, long amountPesos) {

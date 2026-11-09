@@ -33,7 +33,7 @@ class SaleApplicationIT {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);
 
-    var applied = sales.apply(saleCommand(ctx, product, 16500, 2, "CASH"));
+    var applied = sales.apply(saleCommand(ctx, product, 16500, 16500, 2, null, "CASH"));
 
     assertEquals(33000, applied.totalPesos());
     assertEquals("ALM-A-000001", applied.displayCode());
@@ -50,7 +50,7 @@ class SaleApplicationIT {
     var product = insertProduct(ctx, 16500);
     var modifier = insertModifier(ctx, "Bacon", 2000);
 
-    var applied = sales.apply(saleCommand(ctx, product, 16500, 2, "CARD",
+    var applied = sales.apply(saleCommand(ctx, product, 16500, 16500, 2, null, "CARD",
         new CreateSaleCommand.ModifierCommand(modifier, "Bacon", 2000)));
 
     // 2 x (16500 + 2000) = 37000
@@ -64,18 +64,73 @@ class SaleApplicationIT {
             + "(select id from sale_items where sale_id = ?)", String.class, applied.id()));
   }
 
+  @Test void cashierCannotOverridePrice() {
+    var ctx = fixture();
+    var product = insertProduct(ctx, 16500);
+
+    assertThrows(IllegalStateException.class, () -> sales.apply(
+        saleCommand(ctx, product, 14000, 16500, 1, "descuento autorizado", "CASH")));
+    assertEquals(0, jdbc.queryForObject("select count(*) from sales where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
+  @Test void managerOverrideStoresBothPricesAndAudit() {
+    var ctx = fixture();
+    jdbc.update("update users set role = 'MANAGER' where id = ?", ctx.userId());
+    var product = insertProduct(ctx, 16500);
+
+    var applied = sales.apply(
+        saleCommand(ctx, product, 14000, 16500, 1, "descuento autorizado", "CASH"));
+
+    assertEquals(14000, applied.totalPesos());
+    var row = jdbc.queryForMap("select unit_price_pesos, catalog_unit_price_pesos, override_reason, "
+        + "override_user_id from sale_items where sale_id = ?", applied.id());
+    assertEquals(14000L, ((Number) row.get("unit_price_pesos")).longValue());
+    assertEquals(16500L, ((Number) row.get("catalog_unit_price_pesos")).longValue());
+    assertEquals("descuento autorizado", row.get("override_reason"));
+    assertEquals(1, jdbc.queryForObject("select count(*) from audit_events where event_type = "
+        + "'PRICE_OVERRIDDEN'", Integer.class));
+  }
+
+  @Test void splitPaymentsAreStoredAndCashExpectedUsesOnlyCash() {
+    var ctx = fixture();
+    var product = insertProduct(ctx, 20000);
+
+    var applied = sales.apply(saleCommand(ctx, product, 20000, 20000, 1, null,
+        new CreateSaleCommand.PaymentCommand(PaymentMethod.CASH, 12000),
+        new CreateSaleCommand.PaymentCommand(PaymentMethod.CARD, 8000)));
+
+    assertEquals(2, jdbc.queryForObject("select count(*) from payments where sale_id = ?",
+        Integer.class, applied.id()));
+    assertEquals(62000, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+  }
+
+  @Test void paymentSumMustMatchTheTotal() {
+    var ctx = fixture();
+    var product = insertProduct(ctx, 20000);
+
+    assertThrows(IllegalArgumentException.class, () -> sales.apply(saleCommand(ctx, product,
+        20000, 20000, 1, null,
+        new CreateSaleCommand.PaymentCommand(PaymentMethod.CASH, 19000))));
+    assertEquals(0, jdbc.queryForObject("select count(*) from sales where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from payments where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
   @Test void deliveryFeeAndTableLabelAreStored() {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);
 
-    var delivery = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH")
+    var delivery = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null,
+        new CreateSaleCommand.PaymentCommand(PaymentMethod.CASH, 21500))
         .withType(SaleType.DELIVERY)
         .withDeliveryFee(5000));
     assertEquals(21500, delivery.totalPesos());
     assertEquals(5000, jdbc.queryForObject("select delivery_fee_pesos from sales where id = ?",
         Long.class, delivery.id()));
 
-    var dineIn = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH")
+    var dineIn = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH")
         .withType(SaleType.DINE_IN)
         .withTableLabel("Mesa 4"));
     assertEquals("Mesa 4", jdbc.queryForObject("select table_label from sales where id = ?",
@@ -88,7 +143,7 @@ class SaleApplicationIT {
     jdbc.update("update shifts set closed_at = now() where id = ?", ctx.shiftId());
 
     assertThrows(IllegalStateException.class,
-        () -> sales.apply(saleCommand(ctx, product, 16500, 1, "CASH")));
+        () -> sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH")));
     assertEquals(0, jdbc.queryForObject("select count(*) from sales where tenant_id = ?",
         Integer.class, ctx.tenantId()));
   }
@@ -96,7 +151,7 @@ class SaleApplicationIT {
   @Test void shiftExpectedCashMatchesSalesAndRefunds() {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);
-    var sale = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH"));
+    var sale = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH"));
 
     assertEquals(66500, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
 
@@ -116,7 +171,7 @@ class SaleApplicationIT {
   @Test void rejectsASecondRefundOfTheSameSale() {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);
-    var sale = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH"));
+    var sale = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH"));
     var refund = new RefundCommand(ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(),
         ctx.shiftId(), sale.id(), "CASH", "cobro equivocado", Instant.now());
     shifts.applyRefund(refund);
@@ -129,7 +184,7 @@ class SaleApplicationIT {
   @Test void refundInANewShiftDoesNotChangeTheClosedShift() {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);
-    var sale = sales.apply(saleCommand(ctx, product, 16500, 1, "CASH"));
+    var sale = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH"));
     shifts.close(new com.caja.shifts.CloseShiftCommand(ctx.tenantId(), ctx.locationId(),
         ctx.shiftId(), 66500));
 
@@ -191,14 +246,31 @@ class SaleApplicationIT {
     return modifierId;
   }
 
-  private CreateSaleCommand saleCommand(Ctx ctx, UUID productId, long unitPrice, int quantity,
-                                        String method,
+  private CreateSaleCommand saleCommand(Ctx ctx, UUID productId, long unitPrice, long catalogPrice,
+                                        int quantity, String overrideReason, String method,
                                         CreateSaleCommand.ModifierCommand... modifiers) {
+    var total = (long) quantity * (unitPrice + java.util.Arrays.stream(modifiers)
+        .mapToLong(CreateSaleCommand.ModifierCommand::additionalPricePesos).sum());
+    return saleCommand(ctx, productId, unitPrice, catalogPrice, quantity, overrideReason,
+        List.of(modifiers), new CreateSaleCommand.PaymentCommand(PaymentMethod.valueOf(method), total));
+  }
+
+  private CreateSaleCommand saleCommand(Ctx ctx, UUID productId, long unitPrice, long catalogPrice,
+                                        int quantity, String overrideReason,
+                                        CreateSaleCommand.PaymentCommand... payments) {
+    return saleCommand(ctx, productId, unitPrice, catalogPrice, quantity, overrideReason,
+        List.of(), payments);
+  }
+
+  private CreateSaleCommand saleCommand(Ctx ctx, UUID productId, long unitPrice, long catalogPrice,
+                                        int quantity, String overrideReason,
+                                        List<CreateSaleCommand.ModifierCommand> modifiers,
+                                        CreateSaleCommand.PaymentCommand... payments) {
     var items = List.of(new CreateSaleCommand.ItemCommand(productId, "Producto", "HAMBURGUESAS",
-        quantity, unitPrice, null, null, List.of(modifiers), List.of()));
+        quantity, unitPrice, null, null, modifiers, List.of(), catalogPrice, overrideReason));
     return new CreateSaleCommand(java.util.UUID.randomUUID(), ctx.tenantId(), ctx.locationId(),
         ctx.deviceId(), ctx.userId(),
-        ctx.shiftId(), SaleType.COUNTER, null, 0, items, PaymentMethod.valueOf(method),
+        ctx.shiftId(), SaleType.COUNTER, null, 0, items, List.of(payments),
         UUID.randomUUID(), ctx.nextDisplayCode(), ctx.seq().get(), Instant.now());
   }
 }

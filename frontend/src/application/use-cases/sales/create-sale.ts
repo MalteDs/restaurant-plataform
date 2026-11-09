@@ -8,10 +8,17 @@ export interface SaleItemInput {
   categoryName: string
   quantity: number
   unitPricePesos: number
+  catalogUnitPricePesos: number
   costPesos: number | null
   note?: string | null
+  overrideReason?: string | null
   modifiers: ModifierRow[]
   components: ComponentRow[]
+}
+
+export interface SalePaymentInput {
+  method: 'CASH' | 'CARD' | 'BREB'
+  amountPesos: number
 }
 
 export interface SaleInput {
@@ -19,7 +26,7 @@ export interface SaleInput {
   tableLabel?: string | null
   deliveryFeePesos?: number
   items: SaleItemInput[]
-  method: 'CASH' | 'CARD' | 'BREB'
+  payments: SalePaymentInput[]
 }
 
 export interface CreatedSale {
@@ -73,12 +80,40 @@ export async function createSale(
   if (!userId) {
     throw new Error('No hay usuario activo')
   }
+  const user = await database.users.get(userId)
+  const overrides = input.items.filter(
+    (item) => item.unitPricePesos !== item.catalogUnitPricePesos
+  )
+  if (overrides.length > 0) {
+    if (user?.role !== 'MANAGER' && user?.role !== 'ADMIN') {
+      throw new Error('Solo encargado o admin puede cambiar precios')
+    }
+    for (const item of overrides) {
+      const reason = item.overrideReason?.trim() ?? ''
+      if (reason.length < 5 || reason.length > 200) {
+        throw new Error('El cambio de precio necesita un motivo de al menos 5 caracteres')
+      }
+    }
+  }
   const prefixRow = await database.meta.get('devicePrefix')
   const prefix = deps.devicePrefix
     ?? (typeof prefixRow?.value === 'string' ? prefixRow.value : 'ALM-A')
   const now = deps.now ?? new Date()
   const totalPesos = input.items.reduce((sum, item) => sum + lineTotal(item), 0)
     + (input.deliveryFeePesos ?? 0)
+  if (!input.payments || input.payments.length === 0) {
+    throw new Error('La venta necesita al menos un pago')
+  }
+  let paid = 0
+  for (const payment of input.payments) {
+    if (payment.amountPesos < 0 || (totalPesos > 0 && payment.amountPesos === 0)) {
+      throw new Error('Cada pago debe ser mayor que cero')
+    }
+    paid += payment.amountPesos
+  }
+  if (paid !== totalPesos) {
+    throw new Error('Los pagos no suman el total de la venta')
+  }
 
   const created = await database.transaction(
     'rw',
@@ -97,7 +132,6 @@ export async function createSale(
         status: 'CHARGED',
         totalPesos,
         type: input.type,
-        method: input.method,
         operationalDate,
         createdAt,
         shiftId: shift.id,
@@ -106,26 +140,32 @@ export async function createSale(
         deliveryFeePesos: input.deliveryFeePesos ?? 0
       })
       await database.saleItems.bulkAdd(
-        input.items.map((item) => ({
-          id: crypto.randomUUID(),
-          saleId,
-          productId: item.productId,
-          productName: item.productName,
-          categoryName: item.categoryName,
-          quantity: item.quantity,
-          unitPricePesos: item.unitPricePesos,
-          costPesos: item.costPesos,
-          lineTotalPesos: lineTotal(item),
-          modifiers: item.modifiers,
-          components: item.components
-        }))
+        input.items.map((item) => {
+          const override = item.unitPricePesos !== item.catalogUnitPricePesos
+          return {
+            id: crypto.randomUUID(),
+            saleId,
+            productId: item.productId,
+            productName: item.productName,
+            categoryName: item.categoryName,
+            quantity: item.quantity,
+            unitPricePesos: item.unitPricePesos,
+            catalogUnitPricePesos: item.catalogUnitPricePesos,
+            overrideReason: override ? item.overrideReason ?? null : null,
+            overrideUserId: override ? userId : null,
+            costPesos: item.costPesos,
+            lineTotalPesos: lineTotal(item),
+            modifiers: item.modifiers,
+            components: item.components
+          }
+        })
       )
-      await database.payments.add({
+      await database.payments.bulkAdd(input.payments.map((payment) => ({
         id: crypto.randomUUID(),
         saleId,
-        method: input.method,
-        amountPesos: totalPesos
-      })
+        method: payment.method,
+        amountPesos: payment.amountPesos
+      })))
       await database.operations.add({
         operationId: crypto.randomUUID(),
         seq: operationSeq,
@@ -140,7 +180,7 @@ export async function createSale(
           tableLabel: input.tableLabel ?? null,
           deliveryFeePesos: input.deliveryFeePesos ?? 0,
           shiftId: shift.id,
-          method: input.method,
+          payments: input.payments,
           displayCode,
           deviceSeq,
           items: input.items.map((item) => ({
@@ -149,6 +189,10 @@ export async function createSale(
             categoryName: item.categoryName,
             quantity: item.quantity,
             unitPricePesos: item.unitPricePesos,
+            catalogUnitPricePesos: item.catalogUnitPricePesos,
+            overrideReason: item.unitPricePesos !== item.catalogUnitPricePesos
+              ? item.overrideReason ?? null
+              : null,
             costPesos: item.costPesos,
             note: item.note ?? null,
             modifiers: item.modifiers.map((modifier) => ({

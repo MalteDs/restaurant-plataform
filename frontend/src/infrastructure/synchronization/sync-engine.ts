@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { OPERATION_QUEUED } from './notify'
 import { db, type CajaDb } from '../../infrastructure/database/schema'
-import { request } from '../api/client'
+import { ApiError, request } from '../api/client'
 
 const BATCH_SIZE = 50
 const BASE_BACKOFF_MS = 5_000
@@ -22,7 +22,10 @@ export interface SyncApi {
   post: (body: unknown) => Promise<SyncResponse>
 }
 
-export type EngineStatus = 'pending' | 'syncing' | 'error' | 'up-to-date' | 'offline'
+export type EngineStatus = 'pending' | 'syncing' | 'error' | 'up-to-date' | 'offline' | 'unregistered' | 'auth-error'
+
+// Evita repetir un 401 con el mismo token hasta que se registre uno nuevo.
+let rejectedDeviceToken: string | null = null
 
 const defaultApi: SyncApi = {
   post: (body) =>
@@ -65,6 +68,14 @@ export async function pushPending(
     return { status: 'offline', pushed: 0 }
   }
 
+  const deviceToken = localStorage.getItem('caja.deviceToken')
+  if (!deviceToken) {
+    return { status: 'unregistered', pushed: 0 }
+  }
+  if (rejectedDeviceToken === deviceToken) {
+    return { status: 'auth-error', pushed: 0 }
+  }
+
   const queued = await database.operations
     .where('status')
     .anyOf(['LOCAL_PENDING', 'SYNC_ERROR'])
@@ -81,18 +92,22 @@ export async function pushPending(
   let response: SyncResponse
   try {
     response = await api.post({ operations: due.map(toWire) })
-  } catch {
+  } catch (caught) {
+    const unauthorized = caught instanceof ApiError && caught.status === 401
+    if (unauthorized) {
+      rejectedDeviceToken = deviceToken
+    }
     await database.transaction('rw', database.operations, async () => {
       for (const operation of due) {
         const attempts = operation.attempts + 1
         await database.operations.update(operation.operationId, {
           attempts,
           nextRetryAt: backoff(attempts, now),
-          error: 'Sin conexión con el servidor'
+          error: unauthorized ? 'Dispositivo no autorizado' : 'Sin conexión con el servidor'
         })
       }
     })
-    return { status: 'error', pushed: 0 }
+    return { status: unauthorized ? 'auth-error' : 'error', pushed: 0 }
   }
 
   let synced = 0
@@ -139,6 +154,13 @@ export async function pushPending(
 export async function engineStatus(database: CajaDb = db): Promise<EngineStatus> {
   if (!navigator.onLine) {
     return 'offline'
+  }
+  const deviceToken = localStorage.getItem('caja.deviceToken')
+  if (!deviceToken) {
+    return 'unregistered'
+  }
+  if (rejectedDeviceToken === deviceToken) {
+    return 'auth-error'
   }
   const pending = await database.operations.where('status').anyOf(['LOCAL_PENDING', 'SYNC_ERROR']).count()
   if (pending === 0) {

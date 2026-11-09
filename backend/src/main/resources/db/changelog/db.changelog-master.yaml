@@ -3,3 +3,13 @@ databaseChangeLog:
       file: db/changelog/001-core.yaml
   - include:
       file: db/changelog/010-catalog-seed.yaml
+  - include:
+      file: db/changelog/020-e2e-admin.yaml
+  - include:
+      file: db/changelog/021-catalog-sale-days.yaml
+  - include:
+      file: db/changelog/022-price-override.yaml
+  - include:
+      file: db/changelog/023-split-payments.yaml
+  - include:
+      file: db/changelog/024-expense-categories.yaml

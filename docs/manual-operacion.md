@@ -20,26 +20,46 @@
 2. Si el producto tiene modificadores, elige las opciones respetando el mínimo y el máximo.
 3. Elige mostrador, domicilio (con envío) o mesa (con etiqueta).
 4. Elige el pago: efectivo, tarjeta o Bre-B.
+   - Para pago combinado toca **Dividir pago**, ajusta el monto de la primera parte y agrega las demás. El botón **Cobrar** solo se habilita cuando **Restante** llega a $0.
+   - El arqueo del turno suma únicamente las porciones pagadas en efectivo.
 5. Toca **Cobrar**. La venta se guarda en el mismo instante junto con su operación pendiente.
 6. El doble clic está bloqueado: un solo cobro por gesto.
+
+## Promociones por día
+
+- Un producto o combo puede limitarse a ciertos días de la semana (1=lunes … 7=domingo).
+- Fuera de esos días no aparece en la pantalla de venta.
+- Se configura en **Administración → Catálogo**, columna **Días**. Vacío significa todos los días.
+- Los precios de promoción no vienen precargados: el administrador define el precio y los días del combo.
+
+## Cambiar el precio de una línea
+
+- Solo un **Encargado** o **Administrador** ve el botón **Cambiar precio** en el carrito.
+- El nuevo precio debe ser un entero mayor o igual a 0 y el motivo debe tener entre 5 y 200 caracteres.
+- La venta guarda el precio de lista, el precio aplicado, el motivo y el usuario que autorizó.
+- Funciona sin conexión; el servidor revalida el rol y el motivo al sincronizar.
 
 ## Devolver
 
 1. En **Pedidos**, busca la venta y toca **Devolver**.
-2. Escribe el motivo (obligatorio) y confirma.
+2. Escribe el motivo (obligatorio), elige el **Medio de devolución** y confirma.
 3. La devolución es por el total de la venta y queda en el turno abierto actual.
-4. Funciona sin conexión; se sincroniza después.
+4. Si devuelves en efectivo, el efectivo esperado del turno baja por el total; si devuelves por tarjeta o Bre-B, no afecta el arqueo.
+5. Funciona sin conexión; se sincroniza después.
 
 ## Cerrar el turno
 
 1. Ve a **Caja** y escribe el efectivo contado.
 2. Toca **Cerrar turno**. La pantalla muestra el esperado y la diferencia.
-3. La diferencia se registra, no se corrige sola. Si es distinta de cero, revisa ventas y devoluciones en efectivo.
-4. Exporta el resumen del día con **Exportar CSV**.
+3. El esperado suma el fondo inicial, las porciones en efectivo de las ventas, los ingresos y resta las devoluciones en efectivo y los retiros. Los pagos con tarjeta o Bre-B no entran al arqueo.
+4. La diferencia se registra, no se corrige sola. Si es distinta de cero, revisa ventas y devoluciones en efectivo.
+5. Exporta el resumen del día con **Exportar CSV**.
 
 ## Gastos y administración
 
 - **Reportes → Gastos** requiere conexión y rol gerente o administrador.
+- Cada gasto exige una categoría activa. El administrador las crea y activa en **Administración → Configuración → Categorías de gasto**.
+- El reporte muestra **Gastos por categoría** con el nombre con el que se registró cada gasto; renombrar una categoría no reescribe el histórico.
 - **Administración** (catálogo, usuarios, dispositivos, sede) requiere conexión y rol administrador.
 - Cambiar un precio no altera ventas anteriores: el precio se congela al vender.
 

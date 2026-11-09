@@ -1,10 +1,10 @@
 # Estado de implementación — Caja v1
 
-**Última actualización:** 2026-11-06
-**Fase:** v1 completa: Tareas 1–15 implementadas.
+**Última actualización:** 2026-11-09
+**Fase:** v1 + mejoras de operación (plan 2026-11-09) completas.
 **Tarea en curso:** ninguna.
-**Último commit de implementación:** ver `git log -1` (`feat: offline e2e, cloud deployment and recovery docs`).
-**Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06).
+**Último commit de implementación:** ver `git log -1` (`feat: categorias de gasto en la interfaz y reportes`).
+**Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
 **Bloqueos:** ninguno.
 
 ## Progreso
@@ -24,6 +24,36 @@
 - [x] Tarea 13 — Devoluciones, gastos y administración
 - [x] Tarea 14 — Recuperación: exportar y restaurar pendientes
 - [x] Tarea 15 — E2E offline, despliegue y documentación
+
+## Mejoras de operación (2026-11-09)
+
+- [x] Tarea 1 — Días de venta en el catálogo (backend)
+- [x] Tarea 2 — Días de venta en la caja y el admin (frontend)
+- [x] Tarea 3 — Cambio de precio autorizado con auditoría (backend)
+- [x] Tarea 4 — Cambio de precio por línea en la caja (frontend)
+- [x] Tarea 5 — Pagos combinados (backend)
+- [x] Tarea 6 — Pagos combinados y medio de devolución (frontend)
+- [x] Tarea 7 — Categorías de gasto y reporte (backend)
+- [x] Tarea 8 — Categorías de gasto en la interfaz (frontend)
+- [x] Tarea 9 — Verificación de extremo a extremo y documentación
+
+### Verificación
+
+- Backend: `./mvnw verify` → 52 pruebas, 0 fallos.
+- Frontend: `npm test` → 56 pruebas, 0 fallos; `npm run build` correcto.
+- E2E: `npx playwright test e2e/improvements.spec.ts` → 4 escenarios, incluido pago dividido con arqueo solo de efectivo.
+- Migraciones nuevas: `021-catalog-sale-days`, `022-price-override`, `023-split-payments`, `024-expense-categories`.
+
+### Notas de la iteración
+
+- Promociones: `products.sale_days` con días ISO 1–7. Fuera del día el producto no aparece en Venta. No se sembraron precios de promoción porque el usuario aún no confirmó la lista completa; el Admin los define en el catálogo.
+- Cambio de precio: solo MANAGER/ADMIN, por línea, motivo de 5–200 caracteres y evento `PRICE_OVERRIDDEN`. El servidor revalida rol y motivo al sincronizar; la validación se ejecuta también en `SyncService.validate` para que un rechazo no marque rollback-only la transacción del lote.
+- Pagos combinados: `payments` es una lista; la suma debe coincidir con el total. Operaciones antiguas con `method` siguen sincronizando como un pago único. El efectivo esperado del turno suma solo `p.amount_pesos` de pagos `CASH`.
+- Devoluciones: totales y con un medio elegido por el usuario; una venta con pago mixto no replica automáticamente la distribución al devolver.
+- Gastos: categorías por sede administradas por Admin, con seed Domicilios/Fruver/Insumos/Aseo/Servicios/Otros. El reporte agrupa por el texto congelado del gasto; renombrar la categoría no reescribe el histórico.
+- Compatibilidad: el endpoint de gastos conserva `category` como texto legado para clientes viejos; la UI nueva envía `expenseCategoryId`.
+- Reportes del día: la pantalla usa las ventas locales de este dispositivo y completa gastos y desglose de gastos desde el servidor. La agregación en línea de varios dispositivos no forma parte de esta iteración.
+- Pendiente previo que sigue abierto: el alta de productos/combos desde la interfaz no existe; los nuevos se crean por la API documentada. Los combos promocionales se pueden editar en Catálogo.
 
 ## Notas de la sesión
 

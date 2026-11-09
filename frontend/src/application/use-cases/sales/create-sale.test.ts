@@ -37,7 +37,7 @@ async function seed() {
 function baseInput(): SaleInput {
   return {
     type: 'COUNTER',
-    method: 'CASH',
+    payments: [{ method: 'CASH', amountPesos: 33000 }],
     items: [
       {
         productId: 'p1',
@@ -45,6 +45,7 @@ function baseInput(): SaleInput {
         categoryName: 'HAMBURGUESAS',
         quantity: 2,
         unitPricePesos: 16500,
+        catalogUnitPricePesos: 16500,
         costPesos: null,
         modifiers: [],
         components: []
@@ -85,4 +86,61 @@ it('numera por dispositivo sin colisión', async () => {
 
   expect(first).toBe('ALM-A-000001')
   expect(second).toBe('ALM-A-000002')
+})
+
+it('un cajero no puede cambiar el precio', async () => {
+  const db = await seed()
+
+  await expect(createSale(db, {
+    ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 28000 }],
+    items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
+      overrideReason: 'descuento autorizado' }]
+  })).rejects.toThrow(/encargado|admin/i)
+  expect(await db.sales.count()).toBe(0)
+})
+
+it('un encargado guarda precio de lista, aplicado y motivo', async () => {
+  const db = await seed()
+  await db.users.put({ id: 'u1', username: 'ana', role: 'MANAGER' })
+
+  const out = await createSale(db, {
+    ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 28000 }],
+    items: [{ ...baseInput().items[0], unitPricePesos: 14000, catalogUnitPricePesos: 16500,
+      overrideReason: 'descuento autorizado' }]
+  })
+
+  const item = await db.saleItems.where('saleId').equals(out.saleId).first()
+  expect(item).toMatchObject({
+    unitPricePesos: 14000,
+    catalogUnitPricePesos: 16500,
+    overrideReason: 'descuento autorizado',
+    overrideUserId: 'u1'
+  })
+})
+
+it('guarda dos pagos y exige que sumen el total', async () => {
+  const db = await seed()
+  const item = baseInput().items[0]
+  const out = await createSale(db, {
+    ...baseInput(),
+    items: [{ ...item, quantity: 1, unitPricePesos: 20000, catalogUnitPricePesos: 20000 }],
+    payments: [
+      { method: 'CASH', amountPesos: 12000 },
+      { method: 'CARD', amountPesos: 8000 }
+    ]
+  })
+
+  expect(await db.payments.where('saleId').equals(out.saleId).count()).toBe(2)
+})
+
+it('rechaza pagos que no suman el total', async () => {
+  const db = await seed()
+
+  await expect(createSale(db, {
+    ...baseInput(),
+    payments: [{ method: 'CASH', amountPesos: 19000 }]
+  })).rejects.toThrow(/suman|total/i)
+  expect(await db.sales.count()).toBe(0)
 })

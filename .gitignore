@@ -5,5 +5,5 @@ frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
 frontend/.vite/
-.superpowers/sdd/
+.superpowers/
 frontend/tsconfig.tsbuildinfo

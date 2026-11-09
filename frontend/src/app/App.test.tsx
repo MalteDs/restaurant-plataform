@@ -5,7 +5,10 @@ import { AuthProvider } from './providers/AuthProvider'
 
 it('redirige a login sin sesión', async () => {
   render(
-    <MemoryRouter initialEntries={['/sale']}>
+    <MemoryRouter
+      initialEntries={['/sale']}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <AuthProvider>
         <App />
       </AuthProvider>

@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 023-split-payments
+      author: caja
+      changes:
+        - dropUniqueConstraint:
+            tableName: payments
+            constraintName: payments_sale_uk
+        - createIndex:
+            tableName: payments
+            indexName: payments_sale_idx
+            columns:
+              - column:
+                  name: sale_id

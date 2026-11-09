@@ -10,6 +10,12 @@ interface Location {
   catalogVersion: number
 }
 
+interface ExpenseCategory {
+  id: string
+  name: string
+  active: boolean
+}
+
 export default function SettingsScreen() {
   const online = navigator.onLine
   const [location, setLocation] = useState<Location | null>(null)
@@ -17,6 +23,10 @@ export default function SettingsScreen() {
   const [code, setCode] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
+  const [newCategory, setNewCategory] = useState('')
+  const [categoryMessage, setCategoryMessage] = useState('')
+  const [categoryError, setCategoryError] = useState('')
 
   async function refresh() {
     const current = await request<Location>('/api/locations/current')
@@ -25,9 +35,14 @@ export default function SettingsScreen() {
     setCode(current.code)
   }
 
+  async function refreshCategories() {
+    setCategories(await request<ExpenseCategory[]>('/api/expenses/categories'))
+  }
+
   useEffect(() => {
     if (online) {
       void refresh().catch(() => setError('No se pudo cargar la sede'))
+      void refreshCategories().catch(() => setCategoryError('No se pudieron cargar las categorías'))
     }
   }, [online])
 
@@ -44,6 +59,37 @@ export default function SettingsScreen() {
       await refresh()
     } catch {
       setError('No se pudo guardar la sede')
+    }
+  }
+
+  async function onCreateCategory(event: FormEvent) {
+    event.preventDefault()
+    setCategoryError('')
+    setCategoryMessage('')
+    try {
+      await request('/api/expenses/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCategory })
+      })
+      setNewCategory('')
+      setCategoryMessage('Categoría agregada')
+      await refreshCategories()
+    } catch {
+      setCategoryError('No se pudo agregar la categoría')
+    }
+  }
+
+  async function toggleCategory(category: ExpenseCategory) {
+    setCategoryError('')
+    setCategoryMessage('')
+    try {
+      await request(`/api/expenses/categories/${category.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ active: !category.active })
+      })
+      await refreshCategories()
+    } catch {
+      setCategoryError('No se pudo actualizar la categoría')
     }
   }
 
@@ -71,6 +117,33 @@ export default function SettingsScreen() {
           {message ? <p className="text-sm text-green-700">{message}</p> : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </form>
+      </Card>
+      <Card className="mt-4 max-w-md">
+        <h2 className="mb-3 font-semibold text-gray-900">Categorías de gasto</h2>
+        <form className="flex items-end gap-2" onSubmit={onCreateCategory}>
+          <label className="block flex-1 text-sm font-medium text-gray-700">
+            Nueva categoría
+            <Input className="mt-1" value={newCategory}
+              onChange={(event) => setNewCategory(event.target.value)} required />
+          </label>
+          <Button type="submit">Agregar</Button>
+        </form>
+        <ul className="mt-3 space-y-2 text-sm">
+          {categories.map((category) => (
+            <li key={category.id}
+              className="flex items-center justify-between border-t border-gray-100 pt-2">
+              <span className={category.active ? 'text-gray-900' : 'text-gray-400'}>
+                {category.name}
+              </span>
+              <Button variant="ghost" className="px-2 py-1 text-xs"
+                onClick={() => void toggleCategory(category)}>
+                {category.active ? 'Desactivar' : 'Activar'}
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {categoryMessage ? <p className="mt-3 text-sm text-green-700">{categoryMessage}</p> : null}
+        {categoryError ? <p className="mt-3 text-sm text-red-600">{categoryError}</p> : null}
       </Card>
     </div>
   )

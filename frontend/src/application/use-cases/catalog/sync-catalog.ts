@@ -18,6 +18,7 @@ export interface CatalogSnapshotPayload {
     active: boolean
     modifierGroupIds: string[]
     components: Array<{ productId: string; name: string; quantity: number }>
+    saleDays?: number[]
   }>
   modifierGroups: Array<{
     id: string

@@ -1,13 +1,14 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: postgres
     environment:
       POSTGRES_DB: caja
       POSTGRES_USER: caja
       POSTGRES_PASSWORD: caja
     ports:
-      - "127.0.0.1:5432:5432"
+      # 5433 en el host: 5432 suele estar ocupado por otro PostgreSQL local.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U caja -d caja"]
       interval: 5s
@@ -16,5 +17,44 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  backend:
+    image: maven:3.9-eclipse-temurin-21-alpine
+    working_dir: /app
+    command: mvn -q -DskipTests spring-boot:run
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/caja
+      DB_USERNAME: caja
+      DB_PASSWORD: caja
+      JWT_SECRET: ${JWT_SECRET:-caja-local-desarrollo-cambiar-0123456789abcdef}
+      # Solo en desarrollo: aplica el changeset e2e que crea admin/caja123.
+      LIQUIBASE_CONTEXTS: e2e
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../backend:/app
+      - maven-repo:/root/.m2
+      # target/ en volumen para que el contenedor (root) no escriba en tu repo.
+      - backend-target:/app/target
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_TARGET: http://backend:8080
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ../frontend:/app
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - backend
+
 volumes:
   postgres-data:
+  maven-repo:
+  backend-target:
+  frontend-node-modules:
