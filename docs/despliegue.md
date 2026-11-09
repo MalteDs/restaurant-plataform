@@ -1,5 +1,24 @@
 # Despliegue — Caja v1
 
+## Desarrollo local
+
+Desde la raíz del repositorio:
+
+```bash
+make up      # PostgreSQL + backend + frontend
+make logs    # ver logs de los tres servicios
+make restart # recompila y reinicia el backend tras cambiar Java
+make down    # apagar todo (conserva la base)
+```
+
+- Usuario inicial: `admin` / `caja123`. Lo crea el changeset `020-e2e-admin.yaml`, que solo corre en desarrollo (`LIQUIBASE_CONTEXTS=e2e`). El PIN del login (4-6 dígitos) lo eliges tú; no lo valida el servidor.
+- Frontend en http://localhost:5173 (recarga automática).
+- Backend en http://localhost:8080.
+- PostgreSQL en `127.0.0.1:5433` (`POSTGRES_PORT` lo cambia), porque el 5432 suele estar ocupado por otro PostgreSQL.
+- La primera vez tarda porque descarga imágenes y dependencias de Maven/npm; después arranca en segundos.
+- Cambios en el frontend se recargan solos. Cambios en el backend requieren `make restart`.
+- `docker compose -f infra/docker-compose.yml down -v` borra también la base.
+
 ## Requisitos
 
 - Docker y Docker Compose.

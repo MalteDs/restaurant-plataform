@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// En Docker el backend no es localhost; el compose lo pasa por VITE_API_TARGET.
+const apiTarget = process.env.VITE_API_TARGET ?? 'http://localhost:8080'
+
 export default defineConfig({
   plugins: [
     react(),
@@ -38,15 +41,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/actuator': 'http://localhost:8080'
+      '/api': apiTarget,
+      '/actuator': apiTarget
     }
   },
   preview: {
     port: 4173,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/actuator': 'http://localhost:8080'
+      '/api': apiTarget,
+      '/actuator': apiTarget
     }
   },
   test: {
@@ -55,6 +58,7 @@ export default defineConfig({
     exclude: ['e2e/**', 'node_modules/**'],
     globals: true,
     setupFiles: './src/test/setup.ts',
-    css: false
+    css: false,
+    testTimeout: 15_000
   }
 })
