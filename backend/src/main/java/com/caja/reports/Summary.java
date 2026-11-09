@@ -7,7 +7,8 @@ public record Summary(long salesPesos, long refundsPesos, long netSalesPesos, lo
                       long cardPesos, long brebPesos, int orders, int refundCount,
                       long averageTicketPesos, long costPesos, long expensesPesos,
                       long operatingProfitPesos, List<CategoryRow> byCategory, List<DayRow> byDay,
-                      List<HourRow> byHour, List<ProductRow> byProduct) {
+                      List<HourRow> byHour, List<ProductRow> byProduct,
+                      List<ExpenseCategoryRow> byExpenseCategory) {
   public record DayRow(LocalDate date, long salesPesos) {
   }
 
@@ -18,5 +19,8 @@ public record Summary(long salesPesos, long refundsPesos, long netSalesPesos, lo
   }
 
   public record CategoryRow(String name, long quantity, long salesPesos) {
+  }
+
+  public record ExpenseCategoryRow(String name, long amountPesos) {
   }
 }

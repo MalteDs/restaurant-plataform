@@ -1,0 +1,32 @@
+databaseChangeLog:
+  - changeSet:
+      id: 024-expense-categories
+      author: caja
+      changes:
+        - sql:
+            sql: |
+              create table expense_categories (
+                id uuid primary key,
+                tenant_id uuid not null references tenants(id) on delete restrict,
+                location_id uuid not null,
+                name varchar(100) not null,
+                sort_order int not null default 0,
+                active boolean not null default true,
+                created_at timestamptz not null default now(),
+                updated_at timestamptz,
+                constraint expense_categories_location_name_uk unique (location_id, name),
+                constraint expense_categories_id_tenant_location_uk unique (id, tenant_id, location_id),
+                constraint expense_categories_location_fk foreign key (location_id, tenant_id)
+                  references locations(id, tenant_id) on delete restrict
+              );
+              alter table expenses add column expense_category_id uuid;
+              alter table expenses add constraint expenses_category_fk
+                foreign key (expense_category_id, tenant_id, location_id)
+                references expense_categories(id, tenant_id, location_id) on delete restrict;
+              insert into expense_categories(id, tenant_id, location_id, name, sort_order)
+              select gen_random_uuid(), l.tenant_id, l.id, c.name, c.sort_order
+              from locations l
+              cross join (values ('Domicilios', 1), ('Fruver', 2), ('Insumos', 3),
+                                 ('Aseo', 4), ('Servicios', 5), ('Otros', 6))
+                as c(name, sort_order)
+              on conflict (location_id, name) do nothing;

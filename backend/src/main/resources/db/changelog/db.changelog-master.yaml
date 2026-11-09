@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/022-price-override.yaml
   - include:
       file: db/changelog/023-split-payments.yaml
+  - include:
+      file: db/changelog/024-expense-categories.yaml

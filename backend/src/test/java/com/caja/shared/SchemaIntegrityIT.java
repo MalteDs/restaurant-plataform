@@ -30,7 +30,8 @@ class SchemaIntegrityIT {
         "tenants", "locations", "users", "devices", "categories", "products", "modifier_groups",
         "modifiers", "product_modifier_groups", "combo_components", "shifts", "sales", "sale_items",
         "sale_item_modifiers", "sale_item_components", "payments", "cash_movements", "refunds",
-        "expenses", "orders", "order_items", "sync_operations", "audit_events");
+        "expenses", "expense_categories", "orders", "order_items", "sync_operations",
+        "audit_events");
     var actual = new HashSet<>(jdbc.queryForList(
         "select table_name from information_schema.tables where table_schema = 'public'", String.class));
     assertTrue(actual.containsAll(expected), () -> "Faltan tablas: " + expected.stream()
