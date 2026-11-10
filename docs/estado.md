@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
-**Última actualización:** 2026-11-09
-**Fase:** v1 + mejoras de operación (plan 2026-11-09) completas.
+**Última actualización:** 2026-11-10
+**Fase:** v1 + mejoras de operación + impresión de comprobante implementada; prueba física pendiente.
 **Tarea en curso:** ninguna.
-**Último commit de implementación:** ver `git log -1` (`feat: categorias de gasto en la interfaz y reportes`).
+**Último commit de implementación:** ver `git log -1` (`test: aislar la base de Pedidos y esperar el render`).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
 **Bloqueos:** ninguno.
 
@@ -54,6 +54,29 @@
 - Compatibilidad: el endpoint de gastos conserva `category` como texto legado para clientes viejos; la UI nueva envía `expenseCategoryId`.
 - Reportes del día: la pantalla usa las ventas locales de este dispositivo y completa gastos y desglose de gastos desde el servidor. La agregación en línea de varios dispositivos no forma parte de esta iteración.
 - Pendiente previo que sigue abierto: el alta de productos/combos desde la interfaz no existe; los nuevos se crean por la API documentada. Los combos promocionales se pueden editar en Catálogo.
+
+## Impresión de comprobante (2026-11-10)
+
+- [x] Tarea 1 — Datos y HTML del comprobante
+- [x] Tarea 2 — Impresión automática y botón en Venta
+- [x] Tarea 3 — Reimpresión desde Pedidos
+- [x] Tarea 4 — Verificación automatizada y documentación
+- [ ] Prueba manual en la impresora térmica del local
+
+### Verificación
+
+- Frontend: `npm test` → 74 pruebas, 0 fallos.
+- `npm run build` correcto.
+- E2E no aplica: el diálogo de impresión del navegador no se automatiza.
+
+### Notas de la iteración
+
+- La impresión usa un iframe oculto y `window.print()`: sin dependencias nuevas ni cambios de backend.
+- Se imprime automáticamente al cobrar y queda el botón `Imprimir comprobante`; también se reimprime desde Pedidos.
+- Si la impresora falla, la venta queda guardada y se muestra `No se pudo imprimir. La venta quedó guardada.`.
+- El comprobante es interno: dice `Comprobante de venta`, sin NIT ni datos DIAN.
+- El ancho es fluido para 58 u 80 mm. Falta probarlo en la térmica real; si el texto se corta, ajustar el CSS de `receipt.ts`.
+- Pendiente manual: identificar el modelo de la impresora y registrar el resultado de la prueba física.
 
 ## Notas de la sesión
 
