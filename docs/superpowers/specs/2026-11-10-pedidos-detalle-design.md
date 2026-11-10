@@ -43,16 +43,16 @@ El cajero necesita consultar un pedido completo, reimprimirlo y devolverlo sin r
 ### Lista
 
 - Filtros:
-  - **Día:** por defecto el día operativo actual (`bogotaDate()`); el botón **Ver todo** quita el filtro.
+  - **Rango:** presets **Hoy**, **7 días**, **Mes**, **Año** y **Todo**, más **Desde** y **Hasta** para un rango personalizado. Por defecto, hoy.
   - **Estado:** Todas, Cobradas, Devueltas.
   - **Buscar:** texto contenido en el código, sin distinguir mayúsculas.
 - Orden: `createdAt` descendente.
 - Paginación: 50 filas, botón **Cargar más** mientras haya resultados.
-- Columnas: Código, Fecha y hora, Tipo/Mesa, Total, Estado y **Ver**.
+- Columnas: Código, Fecha y hora, Tipo/Mesa, Total y Estado.
   - Tipo/Mesa usa las mismas etiquetas del comprobante (`Mostrador`, `Domicilio`, `Mesa 4`).
 - Cabecera con el número de pedidos y la suma del conjunto filtrado.
 - Estado vacío: "No hay pedidos para este filtro."
-- La fila no expone **Imprimir** ni **Devolver**; solo **Ver**.
+- La fila completa abre el detalle; no expone **Imprimir** ni **Devolver**.
 
 ### Detalle
 

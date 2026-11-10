@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openDb, type CajaDb, type SaleRow } from '../../infrastructure/database/schema'
 import { bogotaDate } from '../../shared/dates'
+import { presetRange } from './order-list'
 import RefundScreen from './RefundScreen'
 
 const opened: CajaDb[] = []
@@ -212,7 +213,7 @@ it('busca en todo el historial y muestra el estado vacío', async () => {
   renderScreen(db)
 
   await screen.findByText(/51 pedidos/)
-  await userEvent.click(screen.getByRole('button', { name: /ver todo/i }))
+  await userEvent.click(screen.getByRole('button', { name: 'Todo' }))
   await userEvent.type(screen.getByLabelText(/buscar/i), 'vieja')
 
   expect(await screen.findByText('ALM-A-VIEJA')).toBeInTheDocument()
@@ -221,6 +222,31 @@ it('busca en todo el historial y muestra el estado vacío', async () => {
   await userEvent.clear(screen.getByLabelText(/buscar/i))
   await userEvent.type(screen.getByLabelText(/buscar/i), 'no-existe')
   expect(await screen.findByText('No hay pedidos para este filtro.')).toBeInTheDocument()
+})
+
+it('filtra por rangos rápidos y permite un rango personalizado', async () => {
+  const db = testDb()
+  const today = bogotaDate()
+  const weekStart = presetRange('WEEK', today).from!
+  await db.sales.put(order({ id: 'hoy', displayCode: 'ALM-HOY', operationalDate: today }))
+  await db.sales.put(order({ id: 'semana', displayCode: 'ALM-SEMANA', operationalDate: weekStart }))
+  await db.sales.put(order({ id: 'vieja', displayCode: 'ALM-VIEJA', operationalDate: '2025-01-01' }))
+  renderScreen(db)
+
+  expect(await screen.findByText('ALM-HOY')).toBeInTheDocument()
+  expect(screen.queryByText('ALM-SEMANA')).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: '7 días' }))
+  expect(await screen.findByText('ALM-SEMANA')).toBeInTheDocument()
+  expect(screen.queryByText('ALM-VIEJA')).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Todo' }))
+  expect(await screen.findByText('ALM-VIEJA')).toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2025-01-01' } })
+  fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2025-01-01' } })
+  expect(await screen.findByText('ALM-VIEJA')).toBeInTheDocument()
+  await waitFor(() => expect(screen.queryByText('ALM-HOY')).not.toBeInTheDocument())
 })
 
 it('filtra por estado', async () => {

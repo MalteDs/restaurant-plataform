@@ -41,7 +41,7 @@
 
 ## Devolver
 
-1. En **Pedidos**, filtra por día o busca el código y toca **Ver**.
+1. En **Pedidos**, elige **Hoy**, **7 días**, **Mes**, **Año**, **Todo** o un rango **Desde/Hasta**; busca el código y toca la fila.
 2. En el detalle, verifica ítems, pagos y total; usa **Imprimir comprobante** si hace falta.
 3. Toca **Devolver**, escribe un motivo de 5 a 200 caracteres, elige el medio y confirma.
 4. La devolución es por el total de la venta y queda en el turno abierto actual.

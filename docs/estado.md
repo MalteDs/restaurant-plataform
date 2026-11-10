@@ -88,15 +88,15 @@
 
 ### Verificación
 
-- Frontend: `npm test` → 89 pruebas, 0 fallos; `npm run build` correcto.
+- Frontend: `npm test` → 91 pruebas, 0 fallos; `npm run build` correcto.
 - Backend: `./mvnw verify` → pruebas sin fallos, incluida la nueva validación de motivo.
 - Pruebas nuevas: helper de filtros, detalle con ítems/modificadores/pagos, devolución solo desde el detalle, motivo corto rechazado y paginación de 50.
 
 ### Notas de la iteración
 
-- La lista de Pedidos solo ofrece **Ver**; **Imprimir comprobante** y **Devolver** viven en el detalle.
+- La lista de Pedidos abre el detalle al tocar cualquier fila; **Imprimir comprobante** y **Devolver** viven en el detalle.
 - La devolución es un segundo paso dentro del detalle: motivo de 5 a 200 caracteres, medio y confirmación.
-- Filtros: día actual por defecto con **Ver todo**, estado y búsqueda por código; **Cargar más** de 50 en 50.
+- Filtros: **Hoy** por defecto, **7 días**, **Mes**, **Año**, **Todo** o rango **Desde/Hasta**, más estado y búsqueda por código; **Cargar más** de 50 en 50.
 - La venta devuelta muestra monto, medio, motivo y fecha, y ya no permite devolver otra vez.
 - Sin cambios de API ni dependencias nuevas; todo sigue offline con IndexedDB.
 

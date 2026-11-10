@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db, type CajaDb, type SaleRow } from '../../infrastructure/database/schema'
-import { bogotaDate } from '../../shared/dates'
 import { saleTypeLabel } from '../printing/receipt'
 import OrderDetailPanel from './OrderDetailPanel'
 import {
   filterOrders,
   ordersTotal,
+  presetRange,
+  type OrderDatePreset,
   type OrderStatusFilter
 } from './order-list'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
@@ -22,11 +23,21 @@ const dateTime = new Intl.DateTimeFormat('es-CO', {
   timeStyle: 'short'
 })
 
+const datePresets: Array<{ id: Exclude<OrderDatePreset, 'CUSTOM'>; label: string }> = [
+  { id: 'TODAY', label: 'Hoy' },
+  { id: 'WEEK', label: '7 días' },
+  { id: 'MONTH', label: 'Mes' },
+  { id: 'YEAR', label: 'Año' },
+  { id: 'ALL', label: 'Todo' }
+]
+
 export default function RefundScreen({ database = db, onPrint }: RefundScreenProps) {
   const navigate = useNavigate()
   const [sales, setSales] = useState<SaleRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [date, setDate] = useState<string | null>(bogotaDate())
+  const [preset, setPreset] = useState<OrderDatePreset>('TODAY')
+  const [from, setFrom] = useState<string | null>(() => presetRange('TODAY').from)
+  const [to, setTo] = useState<string | null>(() => presetRange('TODAY').to)
   const [status, setStatus] = useState<OrderStatusFilter>('ALL')
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(50)
@@ -41,9 +52,16 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
 
   useEffect(() => {
     setLimit(50)
-  }, [date, status, query])
+  }, [from, to, status, query])
 
-  const matches = filterOrders(sales, { date, status, query })
+  function applyPreset(next: Exclude<OrderDatePreset, 'CUSTOM'>) {
+    const range = presetRange(next)
+    setPreset(next)
+    setFrom(range.from)
+    setTo(range.to)
+  }
+
+  const matches = filterOrders(sales, { from, to, status, query })
   const visible = matches.slice(0, limit)
   const summary = `${matches.length} ${matches.length === 1 ? 'pedido' : 'pedidos'} · $${ordersTotal(matches).toLocaleString('es-CO')}`
 
@@ -53,11 +71,31 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <Card>
-            <div className="grid gap-3 sm:grid-cols-[160px_160px_1fr_auto] sm:items-end">
+            <div className="flex flex-wrap gap-2">
+              {datePresets.map((item) => (
+                <Button key={item.id} variant={preset === item.id ? 'primary' : 'ghost'}
+                  aria-pressed={preset === item.id}
+                  onClick={() => applyPreset(item.id)}>
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
               <label className="block text-sm font-medium text-gray-700">
-                Día
-                <Input className="mt-1" type="date" value={date ?? ''}
-                  onChange={(event) => setDate(event.target.value || null)} />
+                Desde
+                <Input className="mt-1" type="date" value={from ?? ''}
+                  onChange={(event) => {
+                    setPreset('CUSTOM')
+                    setFrom(event.target.value || null)
+                  }} />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Hasta
+                <Input className="mt-1" type="date" value={to ?? ''}
+                  onChange={(event) => {
+                    setPreset('CUSTOM')
+                    setTo(event.target.value || null)
+                  }} />
               </label>
               <label className="block text-sm font-medium text-gray-700">
                 Estado
@@ -76,9 +114,6 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
                 <Input className="mt-1" placeholder="Código del pedido" value={query}
                   onChange={(event) => setQuery(event.target.value)} />
               </label>
-              <Button variant="ghost" onClick={() => setDate(null)} disabled={date === null}>
-                Ver todo
-              </Button>
             </div>
             <p className="mt-4 text-sm font-medium text-gray-700">{summary}</p>
           </Card>
@@ -92,12 +127,22 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
                   <th className="pb-2">Tipo/Mesa</th>
                   <th className="pb-2">Total</th>
                   <th className="pb-2">Estado</th>
-                  <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
                 {visible.map((sale) => (
-                  <tr key={sale.id} className="border-t border-gray-100">
+                  <tr key={sale.id} role="button" tabIndex={0}
+                    aria-label={`Ver ${sale.displayCode}`}
+                    onClick={() => setSelectedId(sale.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelectedId(sale.id)
+                      }
+                    }}
+                    className={`cursor-pointer border-t border-gray-100 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                      selectedId === sale.id ? 'bg-brand-50' : ''
+                    }`}>
                     <td className="py-2 font-medium">{sale.displayCode}</td>
                     <td className="py-2">{dateTime.format(new Date(sale.createdAt))}</td>
                     <td className="py-2">{saleTypeLabel(sale)}</td>
@@ -105,17 +150,11 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
                     <td className="py-2">
                       {sale.status === 'REFUNDED' ? 'Devuelta' : 'Cobrada'}
                     </td>
-                    <td className="py-2 text-right">
-                      <Button variant="ghost" aria-label={`Ver ${sale.displayCode}`}
-                        onClick={() => setSelectedId(sale.id)}>
-                        Ver
-                      </Button>
-                    </td>
                   </tr>
                 ))}
                 {matches.length === 0 ? (
                   <tr>
-                    <td className="py-4 text-sm text-gray-500" colSpan={6}>
+                    <td className="py-4 text-sm text-gray-500" colSpan={5}>
                       No hay pedidos para este filtro.
                     </td>
                   </tr>
