@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CajaDb, CashMovementRow, ShiftRow } from '../../infrastructure/database/schema'
 import { db } from '../../infrastructure/database/schema'
 import { availableExpenseCategories } from '../../application/use-cases/expenses/expense-categories'
-import { closeShift, expectedCash } from '../../application/use-cases/shifts/close-shift'
+import { expectedCash } from '../../application/use-cases/shifts/close-shift'
 import { openShift } from '../../application/use-cases/shifts/open-shift'
 import {
   editCashMovement,
@@ -12,6 +12,8 @@ import {
 } from '../../application/use-cases/shifts/cash-movement'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 import CashMovementPanel from './CashMovementPanel'
+import ShiftClosePanel from './ShiftClosePanel'
+import ShiftHistory from './ShiftHistory'
 
 interface PanelState {
   movement?: CashMovementRow
@@ -24,10 +26,10 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
   const [current, setCurrent] = useState<ShiftRow | null>(null)
   const [expected, setExpected] = useState(0)
   const [movements, setMovements] = useState<CashMovementRow[]>([])
+  const [history, setHistory] = useState<ShiftRow[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [userNames, setUserNames] = useState(new Map<string, string>())
   const [opening, setOpening] = useState('50000')
-  const [counted, setCounted] = useState('')
   const [panel, setPanel] = useState<PanelState | null>(null)
   const [showVoided, setShowVoided] = useState(false)
   const [error, setError] = useState('')
@@ -50,6 +52,9 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
     setCurrent(latest)
     setExpected(expectedPesos)
     setMovements(rows)
+    setHistory(shifts
+      .filter((shift) => shift.closedAt !== null)
+      .sort((left, right) => right.openedAt.localeCompare(left.openedAt)))
     setCategories(available)
     setUserNames(new Map(users.map((user) => [user.id, user.username])))
   }
@@ -88,17 +93,6 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo anular el movimiento')
-    }
-  }
-
-  async function onClose() {
-    setError('')
-    try {
-      await closeShift(database, { countedCashPesos: Number(counted) || 0 })
-      setCounted('')
-      await refresh()
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo cerrar el turno')
     }
   }
 
@@ -186,17 +180,21 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
             </>
           ) : null}
           {open ? (
-            <div className="mt-5 space-y-3 border-t border-gray-200 pt-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Efectivo contado
-                <Input className="mt-1" type="number" min={0} value={counted}
-                  onChange={(event) => setCounted(event.target.value)} />
-              </label>
-              <Button onClick={onClose}>Cerrar turno</Button>
+            <ShiftClosePanel database={database} expectedPesos={expected} onClosed={refresh} />
+          ) : (
+            <div className="mt-5 border-t border-gray-200 pt-3 text-sm">
+              <p>
+                Contado: ${(current.countedCashPesos ?? 0).toLocaleString('es-CO')}
+                {' · '}Diferencia:{' '}
+                <span data-testid="difference" className="font-semibold text-gray-900">
+                  ${(current.differencePesos ?? 0).toLocaleString('es-CO')}
+                </span>
+              </p>
             </div>
-          ) : null}
+          )}
         </Card>
       ) : null}
+      {current ? <ShiftHistory database={database} shifts={history} /> : null}
       {!open ? (
         <Card>
           <p className="text-sm text-gray-500">No hay turno abierto.</p>
