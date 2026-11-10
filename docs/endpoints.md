@@ -67,37 +67,50 @@ curl -X POST http://localhost:8080/api/sync/operations \
   -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
   -d '{"operations":[{"operationId":"33333333-3333-4333-8333-333333333333","seq":3,"type":"REFUND_SALE","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:10:00Z","payload":{"shiftId":"<SHIFT_ID>","saleId":"<SALE_ID>","method":"CASH","reason":"cobro equivocado"}}]}'
 La devolución es por el total de la venta y queda en el turno abierto actual.
-16. Sync — cerrar turno (seq 4)
+16. Sync — movimiento de caja (seq 4)
 curl -X POST http://localhost:8080/api/sync/operations \
   -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
-  -d '{"operations":[{"operationId":"44444444-4444-4444-8444-444444444444","seq":4,"type":"CLOSE_SHIFT","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:20:00Z","payload":{"shiftId":"<SHIFT_ID>","countedCashPesos":50000}}]}'
-Devuelve expectedPesos y differencePesos.
-17. Resumen del día
+  -d '{"operations":[{"operationId":"44444444-4444-4444-8444-444444444444","seq":4,"type":"CASH_MOVEMENT","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:15:00Z","payload":{"shiftId":"<SHIFT_ID>","movementType":"WITHDRAWAL","amountPesos":5000,"reason":"compra lechuga","expenseCategoryName":"Fruver"}}]}'
+Un retiro sin `expenseCategoryName` es un movimiento normal. Con categoría, además se crea el gasto de caja en la misma operación.
+17. Sync — corregir o anular un movimiento (seq 5)
+Corrección: envía los datos nuevos y `replacesMovementId`:
+curl -X POST http://localhost:8080/api/sync/operations \
+  -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
+  -d '{"operations":[{"operationId":"55555555-5555-4555-8555-555555555555","seq":5,"type":"CASH_MOVEMENT","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:16:00Z","payload":{"shiftId":"<SHIFT_ID>","movementType":"WITHDRAWAL","amountPesos":3000,"reason":"compra lechuga","expenseCategoryName":"Aseo","replacesMovementId":"<MOVEMENT_ID>"}}]}'
+Anulación: envía solo `replacesMovementId` y `voided: true`.
+El movimiento viejo queda anulado con usuario y fecha; la corrección crea el nuevo. Un turno cerrado no admite correcciones.
+18. Sync — cerrar turno (seq 6)
+curl -X POST http://localhost:8080/api/sync/operations \
+  -H "X-Device-Token: <DEVICE_TOKEN>" -H "Content-Type: application/json" \
+  -d '{"operations":[{"operationId":"66666666-6666-4666-8666-666666666666","seq":6,"type":"CLOSE_SHIFT","userId":"<USER_ID>","clientCreatedAt":"2026-11-07T14:20:00Z","payload":{"shiftId":"<SHIFT_ID>","countedCashPesos":47000,"expectedPesos":47000,"countedBreakdown":{"20000":2,"1000":7},"closeNote":null}}]}'
+El desglose debe sumar el contado. Si el servidor calcula una diferencia distinta de cero, `closeNote` es obligatoria (5–200 caracteres). Devuelve expectedPesos y differencePesos y guarda el esperado local y el del servidor.
+19. Resumen del día
 curl "http://localhost:8080/api/reports/summary?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
-Ventas brutas, devoluciones, neto, efectivo/tarjeta/Bre-B, costo, gastos, utilidad operativa, ticket promedio y desgloses por día/hora/producto. Incluye `byExpenseCategory` con el total de gastos por categoría.
-18. Registrar gasto (MANAGER o ADMIN)
+Ventas brutas, devoluciones, neto, efectivo/tarjeta/Bre-B, costo, gastos, utilidad operativa, ticket promedio y desgloses por día/hora/producto. Incluye `byExpenseCategory` con el total de gastos por categoría. Los gastos anulados no se incluyen.
+20. Registrar gasto (MANAGER o ADMIN)
 curl -X POST http://localhost:8080/api/expenses \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"expenseCategoryId":"<CATEGORY_ID>","description":"Taxi","amountPesos":10000,"expenseDate":"2026-11-07"}'
-Un CASHIER recibe 403. La categoría debe existir y estar activa.
-19. Listar gastos (MANAGER o ADMIN)
+Un CASHIER recibe 403. La categoría debe existir y estar activa. Los gastos pagados con caja no usan este endpoint: nacen del `CASH_MOVEMENT`.
+21. Listar gastos (MANAGER o ADMIN)
 curl "http://localhost:8080/api/expenses?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
-20. Auditoría (MANAGER o ADMIN)
+No incluye gastos anulados.
+22. Auditoría (MANAGER o ADMIN)
 curl "http://localhost:8080/api/audit?from=2026-11-07&to=2026-11-07" \
   -H "Authorization: Bearer <TOKEN>"
-Registra devoluciones, cierres, gastos y cambios de catálogo.
-21. Listar categorías de gasto (MANAGER o ADMIN)
+Registra devoluciones, cierres, movimientos, gastos y cambios de catálogo.
+23. Listar categorías de gasto (cualquier usuario autenticado)
 curl http://localhost:8080/api/expenses/categories \
   -H "Authorization: Bearer <TOKEN>"
-Devuelve id, nombre, orden y estado activo.
-22. Crear categoría de gasto (ADMIN)
+Devuelve id, nombre, orden y estado activo. Caja las usa sin conexión desde su caché local.
+24. Crear categoría de gasto (ADMIN)
 curl -X POST http://localhost:8080/api/expenses/categories \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"name":"Domicilios"}'
 Nombre repetido → 409.
-23. Activar o renombrar categoría de gasto (ADMIN)
+25. Activar o renombrar categoría de gasto (ADMIN)
 curl -X PUT http://localhost:8080/api/expenses/categories/<CATEGORY_ID> \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"name":"Domicilios","active":false}'
