@@ -53,6 +53,7 @@ it('exige una categoría y envía su id', async () => {
   )
 
   const category = await screen.findByLabelText(/categoría/i)
+  await screen.findByRole('option', { name: /domicilios/i })
   await userEvent.selectOptions(category, 'c1')
   await userEvent.type(screen.getByLabelText(/descripción/i), 'Domicilio')
   await userEvent.type(screen.getByLabelText(/monto/i), '10000')
