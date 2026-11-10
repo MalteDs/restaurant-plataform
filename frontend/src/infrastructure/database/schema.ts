@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { DEFAULT_EXPENSE_CATEGORIES } from '../../shared/expense-categories'
 
 export type Role = 'CASHIER' | 'MANAGER' | 'ADMIN'
 
@@ -97,6 +98,9 @@ export interface ShiftRow {
   expectedPesos: number | null
   differencePesos: number | null
   operationalDate: string
+  countedBreakdown?: Record<string, number> | null
+  closeNote?: string | null
+  closedBy?: string | null
 }
 
 export interface CashMovementRow {
@@ -106,6 +110,16 @@ export interface CashMovementRow {
   amountPesos: number
   reason: string
   operationalDate: string
+  expenseCategoryName?: string | null
+  voidedAt?: string | null
+  voidedBy?: string | null
+  replacesMovementId?: string | null
+}
+
+export interface ExpenseCategoryRow {
+  name: string
+  sortOrder: number
+  active: boolean
 }
 
 export interface RefundRow {
@@ -164,6 +178,7 @@ export class CajaDb extends Dexie {
   operations!: Table<OperationRow, string>
   meta!: Table<MetaRow, string>
   users!: Table<UserRow, string>
+  expenseCategories!: Table<ExpenseCategoryRow, string>
 
   constructor(name = 'caja') {
     super(name)
@@ -186,6 +201,14 @@ export class CajaDb extends Dexie {
     })
     this.version(3).stores({
       sales: 'id, status, operationalDate, createdAt'
+    })
+    this.version(4).stores({
+      expenseCategories: 'name, sortOrder'
+    }).upgrade(async (tx) => {
+      await tx.table('expenseCategories').bulkPut(DEFAULT_EXPENSE_CATEGORIES)
+    })
+    this.on('populate', async (tx) => {
+      await tx.table('expenseCategories').bulkPut(DEFAULT_EXPENSE_CATEGORIES)
     })
   }
 }
