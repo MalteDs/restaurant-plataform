@@ -284,6 +284,65 @@ class SyncIT {
         + "and voided_at is not null", Integer.class, ctx.tenantId()));
   }
 
+  @Test void closeStoresBreakdownAndNote() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close", 1, 43000, 43000,
+        Map.of(20000, 2, 1000, 3), "faltante revisado", Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals("2", jdbc.queryForObject("select counted_breakdown->>'20000' from shifts "
+        + "where id = ?", String.class, ctx.shiftId()));
+    assertEquals("faltante revisado", jdbc.queryForObject("select close_note from shifts "
+        + "where id = ?", String.class, ctx.shiftId()));
+  }
+
+  @Test void breakdownMustMatchCounted() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-bad-sum", 1, 42000, 42000,
+        Map.of(20000, 2, 1000, 3), "faltante", Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from shifts where id = ? "
+        + "and closed_at is not null", Integer.class, ctx.shiftId()));
+  }
+
+  @Test void invalidDenominationIsRejected() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-bad-den", 1, 1234, 1234,
+        Map.of(1234, 1), null, Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+  }
+
+  @Test void shortCloseNoteIsRejected() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-short-note", 1, 49000, 49000,
+        null, "abc", Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+  }
+
+  @Test void legacyCloseWithoutBreakdownStillApplies() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-legacy", 1, 50000, 50000,
+        null, null, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(50000L, jdbc.queryForObject("select counted_cash_pesos from shifts where id = ?",
+        Long.class, ctx.shiftId()));
+  }
+
+  @Test void serverExpectedDivergenceIsStored() throws Exception {
+    var ctx = fixture();
+    push(ctx, List.of(closeOperation(ctx, "op-close-diff", 1, 49000, 49000, null, null,
+        Instant.now())));
+    var row = jdbc.queryForMap("select expected_local_pesos, expected_server_pesos, "
+        + "difference_pesos from shifts where id = ?", ctx.shiftId());
+    assertEquals(49000L, ((Number) row.get("expected_local_pesos")).longValue());
+    assertEquals(50000L, ((Number) row.get("expected_server_pesos")).longValue());
+    assertEquals(-1000L, ((Number) row.get("difference_pesos")).longValue());
+  }
+
   @Test void refundWithShortReasonIsRejectedThroughSync() throws Exception {
     var ctx = fixture();
     var sale = push(ctx, List.of(saleOperation(ctx, "op-refund-sale", 1, 16500, Instant.now())));
@@ -490,6 +549,24 @@ class SyncIT {
     }
     return new SyncOperation(id, seq, "CASH_MOVEMENT", movementId, ctx.userId(), clientCreatedAt,
         payload);
+  }
+
+  private SyncOperation closeOperation(Ctx ctx, String operationId, long seq, long counted,
+                                       long expectedLocal, Map<Integer, Integer> breakdown,
+                                       String note, Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var payload = new java.util.HashMap<String, Object>();
+    payload.put("shiftId", ctx.shiftId().toString());
+    payload.put("countedCashPesos", counted);
+    payload.put("expectedPesos", expectedLocal);
+    if (breakdown != null) {
+      payload.put("countedBreakdown", breakdown);
+    }
+    if (note != null) {
+      payload.put("closeNote", note);
+    }
+    return new SyncOperation(id, seq, "CLOSE_SHIFT", ctx.shiftId(), ctx.userId(),
+        clientCreatedAt, payload);
   }
 
   @SuppressWarnings("unchecked")

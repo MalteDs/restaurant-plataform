@@ -104,7 +104,8 @@ public class SyncService {
 
   private void validate(SyncOperation operation, SyncBatch batch) {
     if (!"CREATE_SALE".equals(operation.type()) && !"REFUND_SALE".equals(operation.type())
-        && !"CASH_MOVEMENT".equals(operation.type())) {
+        && !"CASH_MOVEMENT".equals(operation.type())
+        && !"CLOSE_SHIFT".equals(operation.type())) {
       return;
     }
     var payload = operation.payload();
@@ -136,6 +137,11 @@ public class SyncService {
           throw new IllegalArgumentException("El monto debe ser mayor que cero");
         }
       }
+    }
+    if ("CLOSE_SHIFT".equals(operation.type())) {
+      var counted = ((Number) payload.get("countedCashPesos")).longValue();
+      ShiftApplicationService.validateClose(counted, toBreakdown(payload.get("countedBreakdown")),
+          (String) payload.get("closeNote"));
     }
     if ("CREATE_SALE".equals(operation.type())) {
       var command = toSaleCommand(operation, batch);
@@ -203,7 +209,8 @@ public class SyncService {
             uuid(payload.get("shiftId")), ((Number) payload.get("countedCashPesos")).longValue(),
             payload.get("expectedPesos") == null ? null
                 : ((Number) payload.get("expectedPesos")).longValue(),
-            operation.userId()));
+            operation.userId(), toBreakdown(payload.get("countedBreakdown")),
+            (String) payload.get("closeNote")));
         yield new Outcome(close.shiftId(), Map.of(
             "shiftId", close.shiftId().toString(),
             "expectedPesos", close.expectedPesos(),
@@ -212,6 +219,18 @@ public class SyncService {
       default -> throw new IllegalStateException("Tipo de operacion no soportado: "
           + operation.type());
     };
+  }
+
+  private Map<Integer, Integer> toBreakdown(Object raw) {
+    if (!(raw instanceof Map<?, ?> map) || map.isEmpty()) {
+      return null;
+    }
+    var result = new java.util.LinkedHashMap<Integer, Integer>();
+    for (var entry : map.entrySet()) {
+      result.put(Integer.parseInt(String.valueOf(entry.getKey())),
+          ((Number) entry.getValue()).intValue());
+    }
+    return result;
   }
 
   @SuppressWarnings("unchecked")

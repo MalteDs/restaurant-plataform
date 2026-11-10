@@ -2,9 +2,12 @@ package com.caja.shifts;
 
 import com.caja.audit.AuditService;
 import com.caja.expenses.ExpenseService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -13,15 +16,47 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ShiftApplicationService {
   private static final ZoneId OPERATING_ZONE = ZoneId.of("America/Bogota");
+  private static final Set<Integer> DENOMINATIONS = Set.of(
+      100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50);
 
   private final JdbcTemplate jdbc;
   private final AuditService audit;
   private final ExpenseService expenses;
+  private final ObjectMapper json;
 
-  public ShiftApplicationService(JdbcTemplate jdbc, AuditService audit, ExpenseService expenses) {
+  public ShiftApplicationService(JdbcTemplate jdbc, AuditService audit, ExpenseService expenses,
+                                 ObjectMapper json) {
     this.jdbc = jdbc;
     this.audit = audit;
     this.expenses = expenses;
+    this.json = json;
+  }
+
+  public static void validateClose(long countedCashPesos, Map<Integer, Integer> breakdown,
+                                   String closeNote) {
+    if (closeNote != null && !closeNote.isBlank()) {
+      var note = closeNote.trim();
+      if (note.length() < 5 || note.length() > 200) {
+        throw new IllegalArgumentException(
+            "La nota del cierre debe tener entre 5 y 200 caracteres");
+      }
+    }
+    if (breakdown == null || breakdown.isEmpty()) {
+      return;
+    }
+    long total = 0;
+    for (var entry : breakdown.entrySet()) {
+      if (!DENOMINATIONS.contains(entry.getKey())) {
+        throw new IllegalArgumentException("Denominacion no valida");
+      }
+      if (entry.getValue() == null || entry.getValue() < 0) {
+        throw new IllegalArgumentException("La cantidad no puede ser negativa");
+      }
+      total += (long) entry.getKey() * entry.getValue();
+    }
+    if (total != countedCashPesos) {
+      throw new IllegalArgumentException("El desglose no suma el efectivo contado");
+    }
   }
 
   @Transactional
@@ -114,17 +149,23 @@ public class ShiftApplicationService {
 
   @Transactional
   public ShiftClose close(CloseShiftCommand command) {
+    validateClose(command.countedCashPesos(), command.countedBreakdown(), command.closeNote());
     var expected = expectedCash(command.tenantId(), command.locationId(), command.shiftId());
     var expectedLocal = command.expectedLocalPesos() == null ? expected
         : command.expectedLocalPesos();
     var difference = command.countedCashPesos() - expected;
+    var breakdownJson = command.countedBreakdown() == null || command.countedBreakdown().isEmpty()
+        ? null : json.valueToTree(command.countedBreakdown()).toString();
+    var note = command.closeNote() == null || command.closeNote().isBlank()
+        ? null : command.closeNote().trim();
     var updated = jdbc.update("""
         update shifts
         set closed_at = now(), counted_cash_pesos = ?, expected_local_pesos = ?,
-            expected_server_pesos = ?, difference_pesos = ?, updated_at = now()
+            expected_server_pesos = ?, difference_pesos = ?, counted_breakdown = ?::jsonb,
+            close_note = ?, updated_at = now()
         where id = ? and tenant_id = ? and location_id = ? and closed_at is null
-        """, command.countedCashPesos(), expectedLocal, expected, difference, command.shiftId(),
-        command.tenantId(), command.locationId());
+        """, command.countedCashPesos(), expectedLocal, expected, difference, breakdownJson, note,
+        command.shiftId(), command.tenantId(), command.locationId());
     if (updated == 0) {
       throw new IllegalStateException("El turno no existe o ya está cerrado");
     }
