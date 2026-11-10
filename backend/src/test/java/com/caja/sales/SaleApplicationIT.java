@@ -168,6 +168,20 @@ class SaleApplicationIT {
         "select status from orders where sale_id = ?", String.class, sale.id()));
   }
 
+  @Test void rejectsARefundWithAShortReason() {
+    var ctx = fixture();
+    var product = insertProduct(ctx, 16500);
+    var sale = sales.apply(saleCommand(ctx, product, 16500, 16500, 1, null, "CASH"));
+
+    assertThrows(IllegalArgumentException.class, () -> shifts.applyRefund(new RefundCommand(
+        ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(), ctx.shiftId(),
+        sale.id(), "CASH", "abcd", Instant.now())));
+    assertEquals(0, jdbc.queryForObject("select count(*) from refunds where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+    assertEquals("CHARGED", jdbc.queryForObject("select status from sales where id = ?",
+        String.class, sale.id()));
+  }
+
   @Test void rejectsASecondRefundOfTheSameSale() {
     var ctx = fixture();
     var product = insertProduct(ctx, 16500);

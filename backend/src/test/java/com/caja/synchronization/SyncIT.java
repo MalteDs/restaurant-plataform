@@ -157,6 +157,25 @@ class SyncIT {
     assertEquals(1, countSales(ctx));
   }
 
+  @Test void refundWithShortReasonIsRejectedThroughSync() throws Exception {
+    var ctx = fixture();
+    var sale = push(ctx, List.of(saleOperation(ctx, "op-refund-sale", 1, 16500, Instant.now())));
+    assertEquals("APPLIED", syncStatus(sale.get(0)));
+    var saleId = UUID.fromString((String) result(sale.get(0), "id"));
+
+    var bad = push(ctx, List.of(refundOperation(ctx, "op-bad-refund", 2, saleId, "abcd",
+        Instant.now())));
+    assertEquals("REJECTED", syncStatus(bad.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from refunds where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+
+    var good = push(ctx, List.of(refundOperation(ctx, "op-good-refund", 3, saleId,
+        "cobro equivocado", Instant.now())));
+    assertEquals("APPLIED", syncStatus(good.get(0)));
+    assertEquals(1, jdbc.queryForObject("select count(*) from refunds where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
   @Test void twoHundredRetriesDoNotDuplicateTheSale() throws Exception {
     var ctx = fixture();
     var operation = saleOperation(ctx, "op-200", 1, 16500, Instant.now());
@@ -272,6 +291,14 @@ class SyncIT {
 
   private Object result(Map<String, Object> result, String field) {
     return ((Map<?, ?>) result.get("result")).get(field);
+  }
+
+  private SyncOperation refundOperation(Ctx ctx, String operationId, long seq, UUID saleId,
+                                        String reason, Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    return new SyncOperation(id, seq, "REFUND_SALE", saleId, ctx.userId(), clientCreatedAt,
+        Map.of("shiftId", ctx.shiftId().toString(), "saleId", saleId.toString(),
+            "method", "CASH", "reason", reason));
   }
 
   @SuppressWarnings("unchecked")
