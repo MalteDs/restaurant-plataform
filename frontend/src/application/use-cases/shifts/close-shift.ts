@@ -27,9 +27,9 @@ export async function expectedCash(database: CajaDb, shiftId: string): Promise<n
     .filter((refund) => refund.shiftId === shiftId && refund.method === 'CASH')
     .reduce((sum, refund) => sum + refund.amountPesos, 0)
   const movements = await database.cashMovements.where('shiftId').equals(shiftId).toArray()
-  const deposits = movements.filter((m) => m.type === 'DEPOSIT')
+  const deposits = movements.filter((m) => m.type === 'DEPOSIT' && !m.voidedAt)
     .reduce((sum, movement) => sum + movement.amountPesos, 0)
-  const withdrawals = movements.filter((m) => m.type === 'WITHDRAWAL')
+  const withdrawals = movements.filter((m) => m.type === 'WITHDRAWAL' && !m.voidedAt)
     .reduce((sum, movement) => sum + movement.amountPesos, 0)
 
   return shift.openingCashPesos + cashSales - cashRefunds + deposits - withdrawals
