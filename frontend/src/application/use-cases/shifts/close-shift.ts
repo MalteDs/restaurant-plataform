@@ -1,9 +1,12 @@
 import { notifyOperationQueued } from '../../../infrastructure/synchronization/notify'
 import type { CajaDb } from '../../../infrastructure/database/schema'
+import { DENOMINATIONS } from '../../../shared/denominations'
 import { activeUserId } from '../../../modules/auth/session'
 
 export interface CloseShiftInput {
   countedCashPesos: number
+  countedBreakdown?: Record<string, number>
+  closeNote?: string
 }
 
 export interface CloseShiftResult {
@@ -35,6 +38,33 @@ export async function expectedCash(database: CajaDb, shiftId: string): Promise<n
   return shift.openingCashPesos + cashSales - cashRefunds + deposits - withdrawals
 }
 
+function validateClose(input: CloseShiftInput, differencePesos: number): string {
+  if (input.countedBreakdown) {
+    let total = 0
+    for (const [key, count] of Object.entries(input.countedBreakdown)) {
+      const denomination = Number(key)
+      if (!DENOMINATIONS.includes(denomination)) {
+        throw new Error('Denominación no válida')
+      }
+      if (!Number.isInteger(count) || count < 0) {
+        throw new Error('La cantidad no puede ser negativa')
+      }
+      total += denomination * count
+    }
+    if (total !== input.countedCashPesos) {
+      throw new Error('El desglose no suma el efectivo contado')
+    }
+  }
+  const note = (input.closeNote ?? '').trim()
+  if (differencePesos !== 0 && (note.length < 5 || note.length > 200)) {
+    throw new Error('La nota es obligatoria cuando hay diferencia')
+  }
+  if (differencePesos === 0 && note.length > 0 && (note.length < 5 || note.length > 200)) {
+    throw new Error('La nota debe tener entre 5 y 200 caracteres')
+  }
+  return note
+}
+
 export async function closeShift(
   database: CajaDb,
   input: CloseShiftInput,
@@ -51,6 +81,7 @@ export async function closeShift(
   const now = deps.now ?? new Date()
   const expectedPesos = await expectedCash(database, shift.id)
   const differencePesos = input.countedCashPesos - expectedPesos
+  const closeNote = validateClose(input, differencePesos)
 
   await database.transaction('rw', [database.shifts, database.operations, database.meta], async () => {
     const sequenceRow = await database.meta.get('operationSeq')
@@ -59,9 +90,12 @@ export async function closeShift(
 
     await database.shifts.update(shift.id, {
       closedAt: now.toISOString(),
+      closedBy: userId,
       countedCashPesos: input.countedCashPesos,
       expectedPesos,
-      differencePesos
+      differencePesos,
+      countedBreakdown: input.countedBreakdown ?? null,
+      closeNote: closeNote || null
     })
     await database.operations.add({
       operationId: crypto.randomUUID(),
@@ -76,7 +110,9 @@ export async function closeShift(
         shiftId: shift.id,
         countedCashPesos: input.countedCashPesos,
         expectedPesos,
-        differencePesos
+        differencePesos,
+        countedBreakdown: input.countedBreakdown ?? null,
+        closeNote: closeNote || null
       }
     })
   })
