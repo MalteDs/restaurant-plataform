@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
-import { openDb, type CajaDb } from '../../infrastructure/database/schema'
+import { openDb, type CajaDb, type SaleRow } from '../../infrastructure/database/schema'
 import { bogotaDate } from '../../shared/dates'
 import RefundScreen from './RefundScreen'
 
@@ -63,7 +63,7 @@ it('muestra las ventas registradas', async () => {
     totalPesos: 16500,
     type: 'COUNTER',
     method: 'CASH',
-    operationalDate: '2026-11-07',
+    operationalDate: bogotaDate(),
     createdAt: '2026-11-07T15:00:00.000Z',
     shiftId: 'shift-1',
     userId: 'u1',
@@ -79,7 +79,7 @@ it('reimprime una venta desde Pedidos', async () => {
   const db = testDb()
   await db.sales.put({
     id: 's1', displayCode: 'ALM-A-000001', status: 'CHARGED', totalPesos: 16500,
-    type: 'COUNTER', method: 'CASH', operationalDate: '2026-11-07',
+    type: 'COUNTER', method: 'CASH', operationalDate: bogotaDate(),
     createdAt: '2026-11-07T15:00:00.000Z', shiftId: 'shift-1', userId: 'u1',
     deliveryFeePesos: 0
   })
@@ -104,7 +104,7 @@ it('muestra el detalle con ítems, mesa y pagos', async () => {
   await userEvent.click(await screen.findByRole('button', { name: /ver alm-a-000001/i }))
 
   expect(await screen.findByText(/SENCILLA/)).toBeInTheDocument()
-  expect(screen.getByText(/Mesa 4/)).toBeInTheDocument()
+  expect(screen.getAllByText(/Mesa 4/).length).toBeGreaterThan(0)
   expect(screen.getByText(/Queso/)).toBeInTheDocument()
   expect(screen.getByText(/Sin cebolla/)).toBeInTheDocument()
   expect(screen.getByText('Tarjeta')).toBeInTheDocument()
@@ -170,4 +170,68 @@ it('no rompe con una venta devuelta sin fila de devolución', async () => {
   await userEvent.click(await screen.findByRole('button', { name: /ver alm-a-000001/i }))
   expect((await screen.findAllByText(/Devuelta/)).length).toBeGreaterThan(0)
   expect(screen.queryByRole('button', { name: /devolver/i })).not.toBeInTheDocument()
+})
+
+function order(overrides: Partial<SaleRow> = {}): SaleRow {
+  return {
+    id: 's', displayCode: 'ALM-A-000000', status: 'CHARGED', totalPesos: 16500,
+    type: 'COUNTER', method: 'CASH', operationalDate: bogotaDate(),
+    createdAt: '2026-11-10T12:00:00.000Z', shiftId: 'shift-1', userId: 'u1',
+    deliveryFeePesos: 0, ...overrides
+  }
+}
+
+async function seedOrders(db: CajaDb) {
+  for (let i = 1; i <= 51; i++) {
+    await db.sales.put(order({
+      id: `s${i}`,
+      displayCode: `ALM-A-${String(i).padStart(6, '0')}`,
+      createdAt: `2026-11-10T12:00:00.${String(i).padStart(3, '0')}Z`
+    }))
+  }
+  await db.sales.put(order({
+    id: 'old', displayCode: 'ALM-A-VIEJA', operationalDate: '2026-11-01',
+    createdAt: '2026-11-01T12:00:00.000Z'
+  }))
+}
+
+it('muestra solo el día actual y pagina de 50 en 50', async () => {
+  const db = testDb()
+  await seedOrders(db)
+  renderScreen(db)
+
+  expect(await screen.findByText(/51 pedidos/)).toBeInTheDocument()
+  expect(screen.queryByText('ALM-A-VIEJA')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /cargar más/i }))
+  expect(screen.queryByRole('button', { name: /cargar más/i })).not.toBeInTheDocument()
+})
+
+it('busca en todo el historial y muestra el estado vacío', async () => {
+  const db = testDb()
+  await seedOrders(db)
+  renderScreen(db)
+
+  await screen.findByText(/51 pedidos/)
+  await userEvent.click(screen.getByRole('button', { name: /ver todo/i }))
+  await userEvent.type(screen.getByLabelText(/buscar/i), 'vieja')
+
+  expect(await screen.findByText('ALM-A-VIEJA')).toBeInTheDocument()
+  expect(screen.getByText(/^1 pedido ·/)).toBeInTheDocument()
+
+  await userEvent.clear(screen.getByLabelText(/buscar/i))
+  await userEvent.type(screen.getByLabelText(/buscar/i), 'no-existe')
+  expect(await screen.findByText('No hay pedidos para este filtro.')).toBeInTheDocument()
+})
+
+it('filtra por estado', async () => {
+  const db = testDb()
+  await db.sales.put(order({ id: 'ok', displayCode: 'ALM-A-OK' }))
+  await db.sales.put(order({ id: 'ref', displayCode: 'ALM-A-REF', status: 'REFUNDED' }))
+  renderScreen(db)
+
+  await screen.findByText('ALM-A-OK')
+  await userEvent.selectOptions(screen.getByLabelText('Estado'), 'REFUNDED')
+
+  expect(await screen.findByText('ALM-A-REF')).toBeInTheDocument()
+  expect(screen.queryByText('ALM-A-OK')).not.toBeInTheDocument()
 })
