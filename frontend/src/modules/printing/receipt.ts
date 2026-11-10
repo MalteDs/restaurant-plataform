@@ -92,6 +92,46 @@ function itemsHtml(items: SaleItemRow[]): string {
   }).join('')
 }
 
+export async function printReceipt(database: CajaDb, saleId: string): Promise<void> {
+  const html = buildReceiptHtml(await loadReceiptData(database, saleId))
+  const frame = document.createElement('iframe')
+  frame.setAttribute('aria-hidden', 'true')
+  frame.style.position = 'fixed'
+  frame.style.width = '0'
+  frame.style.height = '0'
+  frame.style.border = '0'
+  frame.style.visibility = 'hidden'
+  document.body.appendChild(frame)
+  const cleanup = () => frame.remove()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      frame.onload = () => {
+        const win = frame.contentWindow
+        if (!win) {
+          cleanup()
+          reject(new Error('No se pudo preparar la impresión'))
+          return
+        }
+        win.addEventListener('afterprint', cleanup, { once: true })
+        try {
+          win.focus()
+          win.print()
+          resolve()
+        } catch (error) {
+          cleanup()
+          reject(error)
+        }
+      }
+      frame.srcdoc = html
+    })
+  } catch (error) {
+    cleanup()
+    throw error
+  } finally {
+    window.setTimeout(cleanup, 60_000)
+  }
+}
+
 export function buildReceiptHtml(data: ReceiptData): string {
   const { sale, items, payments, cashierName, locationName, deviceCode } = data
   const date = new Intl.DateTimeFormat('es-CO', {

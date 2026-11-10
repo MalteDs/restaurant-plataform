@@ -11,7 +11,11 @@ import SaleScreen from './SaleScreen'
 const opened: CajaDb[] = []
 
 function renderScreen(props: ComponentProps<typeof SaleScreen>) {
-  return render(<AuthProvider><SaleScreen {...props} /></AuthProvider>)
+  return render(
+    <AuthProvider>
+      <SaleScreen onPrint={vi.fn()} {...props} />
+    </AuthProvider>
+  )
 }
 
 afterEach(async () => {
@@ -354,4 +358,47 @@ it('muestra los modificadores elegidos en el carrito', async () => {
 
   const cart = screen.getByRole('region', { name: 'Carrito' })
   expect(within(cart).getByText(/extra queso/i)).toBeInTheDocument()
+})
+
+it('imprime automáticamente al cobrar y permite reimprimir', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'SENCILLA', categoryName: 'HAMBURGUESAS', kind: 'PRODUCT',
+    pricePesos: 16500, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], components: []
+  })
+  const create = vi.fn().mockResolvedValue({
+    saleId: 's1', displayCode: 'ALM-A-000001', totalPesos: 16500
+  })
+  const print = vi.fn().mockResolvedValue(undefined)
+
+  renderScreen({ database: db, onCreateSale: create, onPrint: print })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
+
+  expect(print).toHaveBeenCalledWith('s1')
+  await userEvent.click(await screen.findByRole('button', { name: /imprimir comprobante/i }))
+  expect(print).toHaveBeenCalledTimes(2)
+})
+
+it('avisa si falla la impresión y conserva la venta', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'SENCILLA', categoryName: 'HAMBURGUESAS', kind: 'PRODUCT',
+    pricePesos: 16500, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], components: []
+  })
+  const create = vi.fn().mockResolvedValue({
+    saleId: 's1', displayCode: 'ALM-A-000001', totalPesos: 16500
+  })
+  const print = vi.fn().mockRejectedValue(new Error('sin impresora'))
+
+  renderScreen({ database: db, onCreateSale: create, onPrint: print })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
+
+  expect(await screen.findByText(/no se pudo imprimir/i)).toBeInTheDocument()
+  expect(screen.getByText(/venta alm-a-000001 guardada/i)).toBeInTheDocument()
 })

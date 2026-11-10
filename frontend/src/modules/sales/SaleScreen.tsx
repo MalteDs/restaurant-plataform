@@ -6,6 +6,7 @@ import { Button, Card, Input, PageHeader } from '../../shared/ui'
 import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
+import { printReceipt } from '../printing/receipt'
 
 type PaymentMethod = SaleInput['payments'][number]['method']
 
@@ -23,9 +24,14 @@ function categorySectionId(category: string): string {
 interface SaleScreenProps {
   database?: CajaDb
   onCreateSale?: (input: SaleInput) => Promise<CreatedSale>
+  onPrint?: (saleId: string) => Promise<void>
 }
 
-export default function SaleScreen({ database = db, onCreateSale }: SaleScreenProps) {
+export default function SaleScreen({
+  database = db,
+  onCreateSale,
+  onPrint
+}: SaleScreenProps) {
   const { user } = useAuth()
   const canOverride = user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const [products, setProducts] = useState<ProductRow[]>([])
@@ -53,7 +59,8 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [cartOpen, setCartOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState('')
+  const [lastSale, setLastSale] = useState<CreatedSale | null>(null)
+  const [printError, setPrintError] = useState('')
   const [error, setError] = useState('')
   const [now, setNow] = useState(new Date())
   const lastCharge = useRef(0)
@@ -245,6 +252,15 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     setParts((current) => current.filter((part) => part.key !== key))
   }
 
+  async function runPrint(saleId: string) {
+    setPrintError('')
+    try {
+      await (onPrint ?? ((id: string) => printReceipt(database, id)))(saleId)
+    } catch {
+      setPrintError('No se pudo imprimir. La venta quedó guardada.')
+    }
+  }
+
   async function onCharge() {
     const now = Date.now()
     if (submitting || now - lastCharge.current < 500 || cart.length === 0) {
@@ -252,7 +268,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     }
     lastCharge.current = now
     setError('')
-    setMessage('')
+    setPrintError('')
     if (type === 'DINE_IN' && !tableLabel.trim()) {
       setError('La mesa necesita una etiqueta')
       return
@@ -289,7 +305,8 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       setCartOpen(false)
       setSplitMode(false)
       setParts([])
-      setMessage(`Venta ${created.displayCode} guardada`)
+      setLastSale(created)
+      void runPrint(created.saleId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo cobrar')
     } finally {
@@ -595,7 +612,21 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                   disabled={submitting || cart.length === 0 || (splitMode && remaining !== 0)}>
                   {submitting ? 'Guardando…' : 'Cobrar'}
                 </Button>
-                {message ? <p className="text-sm text-green-700">{message}</p> : null}
+                {lastSale ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <p className="text-sm font-medium text-green-800">
+                      Venta {lastSale.displayCode} guardada
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="mt-2 w-full"
+                      onClick={() => void runPrint(lastSale.saleId)}
+                    >
+                      Imprimir comprobante
+                    </Button>
+                  </div>
+                ) : null}
+                {printError ? <p className="text-sm text-red-600">{printError}</p> : null}
                 {error ? <p className="text-sm text-red-600">{error}</p> : null}
               </div>
             </Card>
