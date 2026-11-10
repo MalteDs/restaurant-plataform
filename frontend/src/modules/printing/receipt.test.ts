@@ -88,6 +88,17 @@ it('incluye el detalle, los pagos y la sede', () => {
   }
 })
 
+it('envuelve nombres largos sin empujar el precio', () => {
+  const html = buildReceiptHtml(data({
+    items: [item({
+      productName: 'SENCILLA CON UN NOMBRE MUY LARGO SIN ESPACIOS PARA PROBAR EL CORTE'
+    })]
+  }))
+
+  expect(html).toContain('class="item-name"')
+  expect(html).toMatch(/\.item-name\s*\{[^}]*overflow-wrap:\s*anywhere/)
+})
+
 it('escapa el texto dinámico', () => {
   const html = buildReceiptHtml(data({
     items: [item({ productName: '<script>alert(1)</script>' })]

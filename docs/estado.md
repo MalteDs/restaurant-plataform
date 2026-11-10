@@ -73,7 +73,7 @@
 
 - La impresión usa un iframe oculto y `window.print()`: sin dependencias nuevas ni cambios de backend.
 - Se imprime automáticamente al cobrar y queda el botón `Imprimir comprobante`; también se reimprime desde Pedidos.
-- Si la impresora falla, la venta queda guardada y se muestra `No se pudo imprimir. La venta quedó guardada.`.
+- Si falla la apertura de impresión, la venta queda guardada y se muestra `No se pudo imprimir. La venta quedó guardada.`. El navegador no confirma si el papel salió; por eso el panel siempre recuerda que se puede reimprimir.
 - El comprobante es interno: dice `Comprobante de venta`, sin NIT ni datos DIAN.
 - El ancho es fluido para 58 u 80 mm. Falta probarlo en la térmica real; si el texto se corta, ajustar el CSS de `receipt.ts`.
 - Pendiente manual: identificar el modelo de la impresora y registrar el resultado de la prueba física.

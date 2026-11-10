@@ -86,7 +86,7 @@ function itemsHtml(items: SaleItemRow[]): string {
       ? `<div class="note">Nota: ${escapeHtml(item.note)}</div>`
       : ''
     return `<div class="item">
-      <div class="row"><span>${item.quantity} x ${escapeHtml(item.productName)}</span><span>${money(item.lineTotalPesos)}</span></div>
+      <div class="row"><span class="item-name">${item.quantity} x ${escapeHtml(item.productName)}</span><span class="item-price">${money(item.lineTotalPesos)}</span></div>
       ${modifiers}${note}
     </div>`
   }).join('')
@@ -161,6 +161,8 @@ export function buildReceiptHtml(data: ReceiptData): string {
   .title { margin: 6px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; }
   .meta { margin-bottom: 6px; font-size: 11px; }
   .meta div, .modifier, .note { overflow-wrap: anywhere; }
+  .item-name { min-width: 0; overflow-wrap: anywhere; }
+  .item-price { white-space: nowrap; }
   .row { display: flex; justify-content: space-between; gap: 8px; }
   hr { margin: 6px 0; border: 0; border-top: 1px dashed #000; }
   .item { margin-bottom: 4px; }

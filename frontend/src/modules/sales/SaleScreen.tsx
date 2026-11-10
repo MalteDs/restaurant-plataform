@@ -624,6 +624,9 @@ export default function SaleScreen({
                     >
                       Imprimir comprobante
                     </Button>
+                    <p className="mt-1 text-xs text-gray-600">
+                      Si la tirilla no salió, puedes imprimirla de nuevo.
+                    </p>
                   </div>
                 ) : null}
                 {printError ? <p className="text-sm text-red-600">{printError}</p> : null}

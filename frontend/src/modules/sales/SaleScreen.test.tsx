@@ -378,6 +378,7 @@ it('imprime automáticamente al cobrar y permite reimprimir', async () => {
   await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
 
   expect(print).toHaveBeenCalledWith('s1')
+  expect(screen.getByText(/si la tirilla no salió/i)).toBeInTheDocument()
   await userEvent.click(await screen.findByRole('button', { name: /imprimir comprobante/i }))
   expect(print).toHaveBeenCalledTimes(2)
 })
