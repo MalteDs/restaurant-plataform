@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db, type SaleRow } from '../../infrastructure/database/schema'
+import { db, type CajaDb, type SaleRow } from '../../infrastructure/database/schema'
 import { refundSale, type RefundInput } from '../../application/use-cases/refunds/refund-sale'
 import { printReceipt } from '../printing/receipt'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 interface RefundScreenProps {
+  database?: CajaDb
   onPrint?: (saleId: string) => Promise<void>
 }
 
-export default function RefundScreen({ onPrint }: RefundScreenProps) {
+export default function RefundScreen({ database = db, onPrint }: RefundScreenProps) {
   const navigate = useNavigate()
   const [sales, setSales] = useState<SaleRow[]>([])
   const [selected, setSelected] = useState<SaleRow | null>(null)
@@ -21,18 +22,18 @@ export default function RefundScreen({ onPrint }: RefundScreenProps) {
   const [submitting, setSubmitting] = useState(false)
 
   async function refresh() {
-    const rows = await db.sales.orderBy('createdAt').reverse().limit(50).toArray()
+    const rows = await database.sales.orderBy('createdAt').reverse().limit(50).toArray()
     setSales(rows)
   }
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [database])
 
   async function onPrintSale(saleId: string) {
     setPrintError('')
     try {
-      await (onPrint ?? ((id: string) => printReceipt(db, id)))(saleId)
+      await (onPrint ?? ((id: string) => printReceipt(database, id)))(saleId)
     } catch {
       setPrintError('No se pudo imprimir. La venta sigue registrada.')
     }
@@ -49,7 +50,7 @@ export default function RefundScreen({ onPrint }: RefundScreenProps) {
     }
     setSubmitting(true)
     try {
-      const result = await refundSale({ saleId: selected.id, reason, method })
+      const result = await refundSale({ saleId: selected.id, reason, method }, database)
       setMessage(`Devolución de $${result.amountPesos.toLocaleString('es-CO')} registrada`)
       setSelected(null)
       setReason('')
