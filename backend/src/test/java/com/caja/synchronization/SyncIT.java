@@ -217,6 +217,73 @@ class SyncIT {
         Integer.class, ctx.tenantId()));
   }
 
+  @Test void correctionVoidsOldAndCreatesNew() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    category(ctx, "Aseo");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-m1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-m2", 2, oldId,
+        "WITHDRAWAL", 3000, "compra lechuga", "Aseo", false, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(second.get(0)));
+    assertEquals(47000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(1, jdbc.queryForObject("select count(*) from cash_movements where id = ? "
+        + "and voided_at is not null", Integer.class, oldId));
+    assertEquals(1, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is null and category = 'Aseo'", Integer.class, ctx.tenantId()));
+    assertEquals(1, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is not null and category = 'Fruver'", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void voidRestoresExpectedCash() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-void-1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-void-2", 2, oldId,
+        null, 0, null, null, true, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(second.get(0)));
+    assertEquals(50000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ? "
+        + "and voided_at is null", Integer.class, ctx.tenantId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is null", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void correctionWithoutOriginalStillCreatesNew() throws Exception {
+    var ctx = fixture();
+    var missing = UUID.randomUUID();
+    var result = push(ctx, List.of(correctionOperation(ctx, "op-missing", 1, missing,
+        "DEPOSIT", 2000, "reposicion", null, false, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(52000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where id = ?",
+        Integer.class, missing));
+  }
+
+  @Test void correctionOnClosedShiftIsRejected() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-closed-1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+    jdbc.update("update shifts set closed_at = now() where id = ?", ctx.shiftId());
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-closed-2", 2, oldId,
+        "WITHDRAWAL", 3000, "compra lechuga", "Aseo", false, Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(second.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ? "
+        + "and voided_at is not null", Integer.class, ctx.tenantId()));
+  }
+
   @Test void refundWithShortReasonIsRejectedThroughSync() throws Exception {
     var ctx = fixture();
     var sale = push(ctx, List.of(saleOperation(ctx, "op-refund-sale", 1, 16500, Instant.now())));
@@ -396,6 +463,30 @@ class SyncIT {
     }
     if (voided) {
       payload.put("voided", true);
+    }
+    return new SyncOperation(id, seq, "CASH_MOVEMENT", movementId, ctx.userId(), clientCreatedAt,
+        payload);
+  }
+
+  private SyncOperation correctionOperation(Ctx ctx, String operationId, long seq,
+                                            UUID replacesMovementId, String type,
+                                            long amountPesos, String reason,
+                                            String expenseCategoryName, boolean voided,
+                                            Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var movementId = UUID.randomUUID();
+    var payload = new java.util.HashMap<String, Object>();
+    payload.put("shiftId", ctx.shiftId().toString());
+    payload.put("replacesMovementId", replacesMovementId.toString());
+    if (voided) {
+      payload.put("voided", true);
+    } else {
+      payload.put("movementType", type);
+      payload.put("amountPesos", amountPesos);
+      payload.put("reason", reason);
+      if (expenseCategoryName != null) {
+        payload.put("expenseCategoryName", expenseCategoryName);
+      }
     }
     return new SyncOperation(id, seq, "CASH_MOVEMENT", movementId, ctx.userId(), clientCreatedAt,
         payload);

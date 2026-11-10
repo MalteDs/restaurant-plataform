@@ -68,10 +68,12 @@ public class ShiftApplicationService {
     var deposits = jdbc.queryForObject("""
         select coalesce(sum(amount_pesos), 0) from cash_movements
         where shift_id = ? and tenant_id = ? and location_id = ? and type = 'DEPOSIT'
+          and voided_at is null
         """, Long.class, shiftId, tenantId, locationId);
     var withdrawals = jdbc.queryForObject("""
         select coalesce(sum(amount_pesos), 0) from cash_movements
         where shift_id = ? and tenant_id = ? and location_id = ? and type = 'WITHDRAWAL'
+          and voided_at is null
         """, Long.class, shiftId, tenantId, locationId);
     return opening + cashSales - cashRefunds + deposits - withdrawals;
   }
@@ -139,6 +141,33 @@ public class ShiftApplicationService {
 
   @Transactional
   public void movement(CashMovementCommand command) {
+    requireOpenShift(command.tenantId(), command.locationId(), command.shiftId());
+
+    UUID replacedId = null;
+    if (command.replacesMovementId() != null) {
+      replacedId = jdbc.query("""
+          select id from cash_movements
+          where id = ? and tenant_id = ? and location_id = ? and shift_id = ?
+            and voided_at is null
+          """, (rs, rowNum) -> rs.getObject("id", UUID.class), command.replacesMovementId(),
+          command.tenantId(), command.locationId(), command.shiftId())
+          .stream().findFirst().orElse(null);
+      if (replacedId != null) {
+        jdbc.update("""
+            update cash_movements set voided_at = now(), voided_by = ?
+            where id = ? and tenant_id = ? and location_id = ?
+            """, command.userId(), replacedId, command.tenantId(), command.locationId());
+        expenses.voidByCashMovement(command.tenantId(), command.locationId(), command.userId(),
+            replacedId);
+        audit.record(command.tenantId(), command.locationId(), command.userId(),
+            "CASH_MOVEMENT_VOIDED", "cash_movement", replacedId,
+            java.util.Map.of("replacedBy", String.valueOf(command.movementId())));
+      }
+      if (command.voided()) {
+        return;
+      }
+    }
+
     if (!"DEPOSIT".equals(command.type()) && !"WITHDRAWAL".equals(command.type())) {
       throw new IllegalArgumentException("El tipo de movimiento no es valido");
     }
@@ -149,16 +178,17 @@ public class ShiftApplicationService {
     if (command.amountPesos() <= 0) {
       throw new IllegalArgumentException("El monto debe ser mayor que cero");
     }
-    requireOpenShift(command.tenantId(), command.locationId(), command.shiftId());
 
     jdbc.update("""
         insert into cash_movements(id, tenant_id, location_id, shift_id, user_id, type,
-                                   amount_pesos, reason, operational_date)
-        values (?, ?, ?, ?, ?, ?::cash_movement_type, ?, ?, ?)
+                                   amount_pesos, reason, operational_date, replaces_movement_id)
+        values (?, ?, ?, ?, ?, ?::cash_movement_type, ?, ?, ?, ?)
         """, command.movementId(), command.tenantId(), command.locationId(), command.shiftId(),
-        command.userId(), command.type(), command.amountPesos(), reason, command.operationalDate());
+        command.userId(), command.type(), command.amountPesos(), reason, command.operationalDate(),
+        replacedId);
     audit.record(command.tenantId(), command.locationId(), command.userId(),
-        "CASH_MOVEMENT_CREATED", "cash_movement", command.movementId(),
+        replacedId == null ? "CASH_MOVEMENT_CREATED" : "CASH_MOVEMENT_CORRECTED",
+        "cash_movement", command.movementId(),
         java.util.Map.of("type", command.type(), "amountPesos", command.amountPesos(),
             "reason", reason));
     if (command.expenseCategoryName() != null && !command.expenseCategoryName().isBlank()) {
