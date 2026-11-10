@@ -39,6 +39,33 @@ public class ExpenseService {
     return id;
   }
 
+  @Transactional
+  public UUID createFromCashMovement(UUID tenantId, UUID locationId, UUID userId,
+                                     UUID cashMovementId, String categoryName, String description,
+                                     long amountPesos, LocalDate expenseDate) {
+    var category = categoryName == null ? "" : categoryName.trim();
+    if (category.isEmpty() || category.length() > 100) {
+      throw new IllegalArgumentException(
+          "La categoria de gasto debe tener entre 1 y 100 caracteres");
+    }
+    var categoryId = jdbc.query("""
+        select id from expense_categories
+        where tenant_id = ? and location_id = ? and name = ?
+        """, (rs, rowNum) -> rs.getObject("id", UUID.class), tenantId, locationId, category)
+        .stream().findFirst().orElse(null);
+    var id = UUID.randomUUID();
+    jdbc.update("""
+        insert into expenses(id, tenant_id, location_id, user_id, category,
+                             expense_category_id, description, amount_pesos, expense_date,
+                             cash_movement_id)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, id, tenantId, locationId, userId, category, categoryId, description, amountPesos,
+        expenseDate, cashMovementId);
+    audit.record(tenantId, locationId, userId, "EXPENSE_CREATED", "expense", id,
+        Map.of("amountPesos", amountPesos, "category", category, "source", "CASH"));
+    return id;
+  }
+
   private String resolveCategory(UUID tenantId, UUID locationId, UUID categoryId,
                                  String legacyCategory) {
     if (categoryId != null) {

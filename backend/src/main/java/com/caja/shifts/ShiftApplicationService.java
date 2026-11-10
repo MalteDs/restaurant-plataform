@@ -1,6 +1,7 @@
 package com.caja.shifts;
 
 import com.caja.audit.AuditService;
+import com.caja.expenses.ExpenseService;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -15,10 +16,12 @@ public class ShiftApplicationService {
 
   private final JdbcTemplate jdbc;
   private final AuditService audit;
+  private final ExpenseService expenses;
 
-  public ShiftApplicationService(JdbcTemplate jdbc, AuditService audit) {
+  public ShiftApplicationService(JdbcTemplate jdbc, AuditService audit, ExpenseService expenses) {
     this.jdbc = jdbc;
     this.audit = audit;
+    this.expenses = expenses;
   }
 
   @Transactional
@@ -135,14 +138,44 @@ public class ShiftApplicationService {
   }
 
   @Transactional
-  public void movement(UUID tenantId, UUID locationId, UUID shiftId, UUID userId, String type,
-                        long amountPesos, String reason, LocalDate operationalDate) {
+  public void movement(CashMovementCommand command) {
+    if (!"DEPOSIT".equals(command.type()) && !"WITHDRAWAL".equals(command.type())) {
+      throw new IllegalArgumentException("El tipo de movimiento no es valido");
+    }
+    var reason = command.reason() == null ? "" : command.reason().trim();
+    if (reason.length() < 5 || reason.length() > 200) {
+      throw new IllegalArgumentException("El motivo debe tener entre 5 y 200 caracteres");
+    }
+    if (command.amountPesos() <= 0) {
+      throw new IllegalArgumentException("El monto debe ser mayor que cero");
+    }
+    requireOpenShift(command.tenantId(), command.locationId(), command.shiftId());
+
     jdbc.update("""
         insert into cash_movements(id, tenant_id, location_id, shift_id, user_id, type,
                                    amount_pesos, reason, operational_date)
         values (?, ?, ?, ?, ?, ?::cash_movement_type, ?, ?, ?)
-        """, UUID.randomUUID(), tenantId, locationId, shiftId, userId, type, amountPesos, reason,
-        operationalDate);
+        """, command.movementId(), command.tenantId(), command.locationId(), command.shiftId(),
+        command.userId(), command.type(), command.amountPesos(), reason, command.operationalDate());
+    audit.record(command.tenantId(), command.locationId(), command.userId(),
+        "CASH_MOVEMENT_CREATED", "cash_movement", command.movementId(),
+        java.util.Map.of("type", command.type(), "amountPesos", command.amountPesos(),
+            "reason", reason));
+    if (command.expenseCategoryName() != null && !command.expenseCategoryName().isBlank()) {
+      expenses.createFromCashMovement(command.tenantId(), command.locationId(), command.userId(),
+          command.movementId(), command.expenseCategoryName(), reason, command.amountPesos(),
+          command.operationalDate());
+    }
+  }
+
+  private void requireOpenShift(UUID tenantId, UUID locationId, UUID shiftId) {
+    var open = jdbc.queryForObject("""
+        select count(*) from shifts
+        where id = ? and tenant_id = ? and location_id = ? and closed_at is null
+        """, Integer.class, shiftId, tenantId, locationId);
+    if (open == null || open == 0) {
+      throw new IllegalStateException("No hay turno abierto");
+    }
   }
 
   private void requireOpenShift(RefundCommand command) {
