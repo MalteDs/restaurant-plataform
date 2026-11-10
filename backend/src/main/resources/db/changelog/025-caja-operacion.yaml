@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 025-caja-operacion
+      author: caja
+      changes:
+        - sql:
+            sql: |
+              alter table shifts
+                add column counted_breakdown jsonb,
+                add column close_note varchar(200);
+              alter table shifts add constraint shifts_close_note_ck
+                check (close_note is null or length(trim(close_note)) between 5 and 200);
+
+              alter table cash_movements
+                add column voided_at timestamptz,
+                add column voided_by uuid,
+                add column replaces_movement_id uuid;
+              alter table cash_movements
+                add constraint cash_movements_id_tenant_location_uk
+                unique (id, tenant_id, location_id);
+              alter table cash_movements add constraint cash_movements_void_ck
+                check ((voided_at is null and voided_by is null)
+                    or (voided_at is not null and voided_by is not null));
+              alter table cash_movements add constraint cash_movements_voided_by_fk
+                foreign key (voided_by, tenant_id, location_id)
+                references users(id, tenant_id, location_id);
+              alter table cash_movements add constraint cash_movements_replaces_fk
+                foreign key (replaces_movement_id, tenant_id, location_id)
+                references cash_movements(id, tenant_id, location_id);
+
+              alter table expenses
+                add column cash_movement_id uuid,
+                add column voided_at timestamptz,
+                add column voided_by uuid;
+              alter table expenses add constraint expenses_void_ck
+                check ((voided_at is null and voided_by is null)
+                    or (voided_at is not null and voided_by is not null));
+              alter table expenses add constraint expenses_voided_by_fk
+                foreign key (voided_by, tenant_id, location_id)
+                references users(id, tenant_id, location_id);
+              alter table expenses add constraint expenses_cash_movement_fk
+                foreign key (cash_movement_id, tenant_id, location_id)
+                references cash_movements(id, tenant_id, location_id);
+
+              create unique index expenses_cash_movement_uk
+                on expenses (cash_movement_id) where cash_movement_id is not null;
+              create index cash_movements_shift_active_idx
+                on cash_movements (shift_id) where voided_at is null;
+              create index expenses_active_report_idx
+                on expenses (tenant_id, location_id, expense_date) where voided_at is null;

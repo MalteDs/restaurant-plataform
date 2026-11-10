@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -120,6 +121,16 @@ class ReportsIT {
             .content(json.writeValueAsString(Map.of("expenseCategoryId", categoryId,
                 "description", "Otro", "amountPesos", 5000))))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test void cashierCanReadExpenseCategories() throws Exception {
+    var ctx = fixture();
+    createCategory(ctx, "Fruver", "admin_categorias");
+
+    mvc.perform(get("/api/expenses/categories")
+            .header("Authorization", "Bearer " + token(ctx, "cajero_categorias", "CASHIER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").exists());
   }
 
   @Test void legacyCategoryTextStillWorks() throws Exception {
