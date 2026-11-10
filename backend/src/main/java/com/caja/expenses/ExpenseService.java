@@ -66,6 +66,25 @@ public class ExpenseService {
     return id;
   }
 
+  @Transactional
+  public void voidByCashMovement(UUID tenantId, UUID locationId, UUID userId,
+                                 UUID cashMovementId) {
+    var expenseId = jdbc.query("""
+        select id from expenses
+        where cash_movement_id = ? and tenant_id = ? and location_id = ? and voided_at is null
+        """, (rs, rowNum) -> rs.getObject("id", UUID.class), cashMovementId, tenantId, locationId)
+        .stream().findFirst().orElse(null);
+    if (expenseId == null) {
+      return;
+    }
+    jdbc.update("""
+        update expenses set voided_at = now(), voided_by = ?
+        where id = ? and tenant_id = ? and location_id = ?
+        """, userId, expenseId, tenantId, locationId);
+    audit.record(tenantId, locationId, userId, "EXPENSE_VOIDED", "expense", expenseId,
+        Map.of("cashMovementId", cashMovementId.toString()));
+  }
+
   private String resolveCategory(UUID tenantId, UUID locationId, UUID categoryId,
                                  String legacyCategory) {
     if (categoryId != null) {
@@ -133,6 +152,7 @@ public class ExpenseService {
         select id, category, description, amount_pesos, expense_date
         from expenses
         where tenant_id = ? and location_id = ? and expense_date between ? and ?
+          and voided_at is null
         order by expense_date desc, created_at desc
         """, (rs, rowNum) -> new Expense(rs.getObject("id", UUID.class), rs.getString("category"),
         rs.getString("description"), rs.getLong("amount_pesos"),
