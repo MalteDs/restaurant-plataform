@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-10
-**Fase:** v1 + mejoras de operación + impresión de comprobante implementada; prueba física pendiente.
+**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos implementados; prueba física pendiente.
 **Tarea en curso:** ninguna.
-**Último commit de implementación:** ver `git log -1` (`test: aislar la base de Pedidos y esperar el render`).
+**Último commit de implementación:** ver `git log -1` (detalle de pedidos).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
 **Bloqueos:** ninguno.
 
@@ -77,6 +77,28 @@
 - El comprobante es interno: dice `Comprobante de venta`, sin NIT ni datos DIAN.
 - El ancho es fluido para 58 u 80 mm. Falta probarlo en la térmica real; si el texto se corta, ajustar el CSS de `receipt.ts`.
 - Pendiente manual: identificar el modelo de la impresora y registrar el resultado de la prueba física.
+
+## Pedidos: detalle y devolución segura (2026-11-10)
+
+- [x] Tarea 1 — Motivo de devolución de 5 a 200 caracteres en el caso de uso local
+- [x] Tarea 2 — Misma validación en backend y sincronización
+- [x] Tarea 3 — Panel de detalle con reimpresión y devolución segura
+- [x] Tarea 4 — Filtros por día, estado y código, resumen y paginación
+- [x] Tarea 5 — Documentación y verificación completa
+
+### Verificación
+
+- Frontend: `npm test` → 91 pruebas, 0 fallos; `npm run build` correcto.
+- Backend: `./mvnw verify` → pruebas sin fallos, incluida la nueva validación de motivo.
+- Pruebas nuevas: helper de filtros, detalle con ítems/modificadores/pagos, devolución solo desde el detalle, motivo corto rechazado y paginación de 50.
+
+### Notas de la iteración
+
+- La lista de Pedidos abre el detalle al tocar cualquier fila; **Imprimir comprobante** y **Devolver** viven en el detalle.
+- La devolución es un segundo paso dentro del detalle: motivo de 5 a 200 caracteres, medio y confirmación.
+- Filtros: **Hoy** por defecto, **7 días**, **Mes**, **Año**, **Todo** o rango **Desde/Hasta**, más estado y búsqueda por código; **Cargar más** de 50 en 50.
+- La venta devuelta muestra monto, medio, motivo y fecha, y ya no permite devolver otra vez.
+- Sin cambios de API ni dependencias nuevas; todo sigue offline con IndexedDB.
 
 ## Notas de la sesión
 

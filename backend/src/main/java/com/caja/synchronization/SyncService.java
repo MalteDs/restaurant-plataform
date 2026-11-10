@@ -126,6 +126,11 @@ public class SyncService {
       sales.validatePayments(command.payments(), command.totalPesos());
     }
     if ("REFUND_SALE".equals(operation.type())) {
+      var reason = payload.get("reason") instanceof String text ? text.trim() : "";
+      if (reason.length() < 5 || reason.length() > 200) {
+        throw new IllegalStateException(
+            "El motivo de la devolución debe tener entre 5 y 200 caracteres");
+      }
       var refunded = jdbc.queryForObject("select count(*) from refunds where sale_id = ?",
           Integer.class, uuid(payload.get("saleId")));
       if (refunded != null && refunded > 0) {

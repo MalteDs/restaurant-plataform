@@ -24,8 +24,8 @@ export async function refundSale(
   now = new Date()
 ): Promise<RefundResult> {
   const reason = input.reason.trim()
-  if (!reason) {
-    throw new Error('El motivo es obligatorio')
+  if (reason.length < 5 || reason.length > 200) {
+    throw new Error('El motivo debe tener entre 5 y 200 caracteres')
   }
   const shift = (await database.shifts.toArray()).find((row) => row.closedAt === null)
   if (!shift) {
