@@ -106,6 +106,7 @@ export interface ShiftRow {
 export interface CashMovementRow {
   id: string
   shiftId: string
+  userId?: string
   type: 'DEPOSIT' | 'WITHDRAWAL'
   amountPesos: number
   reason: string

@@ -79,6 +79,7 @@ export async function registerCashMovement(
       await database.cashMovements.put({
         id: movementId,
         shiftId: shift.id,
+        userId: user,
         type: input.type,
         amountPesos,
         reason,
@@ -137,6 +138,7 @@ export async function editCashMovement(
       await database.cashMovements.put({
         id: newId,
         shiftId: shift.id,
+        userId: user,
         type: input.type,
         amountPesos,
         reason,
