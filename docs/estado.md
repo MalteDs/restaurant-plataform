@@ -88,7 +88,7 @@
 
 ### Verificación
 
-- Frontend: `npm test` → 87 pruebas, 0 fallos; `npm run build` correcto.
+- Frontend: `npm test` → 89 pruebas, 0 fallos; `npm run build` correcto.
 - Backend: `./mvnw verify` → pruebas sin fallos, incluida la nueva validación de motivo.
 - Pruebas nuevas: helper de filtros, detalle con ítems/modificadores/pagos, devolución solo desde el detalle, motivo corto rechazado y paginación de 50.
 

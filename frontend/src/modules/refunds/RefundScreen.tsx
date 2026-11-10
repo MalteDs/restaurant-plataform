@@ -133,6 +133,7 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
 
         {selectedId ? (
           <OrderDetailPanel
+            key={selectedId}
             database={database}
             saleId={selectedId}
             onClose={() => setSelectedId(null)}

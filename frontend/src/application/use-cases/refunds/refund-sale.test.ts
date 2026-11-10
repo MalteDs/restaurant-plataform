@@ -66,3 +66,13 @@ it('exige un motivo de entre 5 y 200 caracteres', async () => {
     { saleId: 'sale-1', reason: 'abcde', method: 'CASH', userId: 'u1' }, db
   )).resolves.toMatchObject({ amountPesos: 16500 })
 })
+
+it('no permite devolver dos veces la misma venta', async () => {
+  const db = await seedPaidSale(16500)
+  const input = { saleId: 'sale-1', reason: 'cobro equivocado', method: 'CASH' as const, userId: 'u1' }
+
+  await refundSale(input, db)
+
+  await expect(refundSale(input, db)).rejects.toThrow('La venta ya fue devuelta')
+  expect(await db.refunds.where('saleId').equals('sale-1').count()).toBe(1)
+})

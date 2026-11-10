@@ -235,3 +235,53 @@ it('filtra por estado', async () => {
   expect(await screen.findByText('ALM-A-REF')).toBeInTheDocument()
   expect(screen.queryByText('ALM-A-OK')).not.toBeInTheDocument()
 })
+
+function delayedSalesGet(db: CajaDb, delayedId: string): CajaDb {
+  const sales = new Proxy(db.sales, {
+    get(target, prop) {
+      if (prop === 'get') {
+        return async (id: string) => {
+          if (id === delayedId) {
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+          return target.get(id)
+        }
+      }
+      const value = Reflect.get(target, prop, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'sales') {
+        return sales
+      }
+      const value = Reflect.get(target, prop, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+}
+
+it('no muestra el pedido anterior si su carga llega tarde', async () => {
+  const db = testDb()
+  await db.sales.put(order({ id: 'sA', displayCode: 'ALM-A-000001', createdAt: '2026-11-10T12:00:00.001Z' }))
+  await db.sales.put(order({ id: 'sB', displayCode: 'ALM-A-000002', createdAt: '2026-11-10T12:00:00.002Z' }))
+  await db.saleItems.put({
+    id: 'iA', saleId: 'sA', productId: 'pA', productName: 'VIEJA',
+    categoryName: 'HAMBURGUESAS', quantity: 1, unitPricePesos: 16500, costPesos: null,
+    lineTotalPesos: 16500, modifiers: [], components: [], lineNumber: 1
+  })
+  await db.saleItems.put({
+    id: 'iB', saleId: 'sB', productId: 'pB', productName: 'NUEVA',
+    categoryName: 'HAMBURGUESAS', quantity: 1, unitPricePesos: 16500, costPesos: null,
+    lineTotalPesos: 16500, modifiers: [], components: [], lineNumber: 1
+  })
+
+  renderScreen(delayedSalesGet(db, 'sA'))
+  await userEvent.click(await screen.findByRole('button', { name: /ver alm-a-000001/i }))
+  await userEvent.click(screen.getByRole('button', { name: /ver alm-a-000002/i }))
+
+  expect(await screen.findByText(/NUEVA/)).toBeInTheDocument()
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  expect(screen.queryByText(/VIEJA/)).not.toBeInTheDocument()
+})

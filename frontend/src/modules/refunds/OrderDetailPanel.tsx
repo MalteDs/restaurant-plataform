@@ -49,19 +49,26 @@ export default function OrderDetailPanel({
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  async function load() {
-    setLoadError('')
-    try {
-      const data = await loadReceiptData(database, saleId)
-      const refund = (await database.refunds.where('saleId').equals(saleId).first()) ?? null
-      setDetail({ ...data, refund })
-    } catch (caught) {
-      setLoadError(caught instanceof Error ? caught.message : 'No se pudo cargar el pedido')
-    }
-  }
-
   useEffect(() => {
-    void load()
+    let cancelled = false
+    setDetail(null)
+    setLoadError('')
+    void (async () => {
+      try {
+        const data = await loadReceiptData(database, saleId)
+        const refund = (await database.refunds.where('saleId').equals(saleId).first()) ?? null
+        if (!cancelled) {
+          setDetail({ ...data, refund })
+        }
+      } catch (caught) {
+        if (!cancelled) {
+          setLoadError(caught instanceof Error ? caught.message : 'No se pudo cargar el pedido')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [database, saleId])
 
   async function onPrintSale() {
