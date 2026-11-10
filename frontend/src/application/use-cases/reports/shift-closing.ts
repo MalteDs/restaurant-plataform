@@ -19,6 +19,12 @@ export interface ShiftClosing {
   differencePesos: number | null
   closeNote: string | null
   countedBreakdown: Record<string, number>
+  movements: Array<{
+    type: string
+    amountPesos: number
+    reason: string
+    expenseCategoryName: string | null
+  }>
   voidedMovements: Array<{
     type: string
     amountPesos: number
@@ -78,6 +84,12 @@ export async function shiftClosing(database: CajaDb, shiftId: string): Promise<S
     differencePesos: shift.differencePesos,
     closeNote: shift.closeNote ?? null,
     countedBreakdown: shift.countedBreakdown ?? {},
+    movements: active.map((movement) => ({
+      type: movement.type,
+      amountPesos: movement.amountPesos,
+      reason: movement.reason,
+      expenseCategoryName: movement.expenseCategoryName ?? null
+    })),
     voidedMovements: voided.map((movement) => ({
       type: movement.type,
       amountPesos: movement.amountPesos,
@@ -112,6 +124,10 @@ export function exportShiftClosingCsv(closing: ShiftClosing): Blob {
     'Movimientos',
     `Ingresos;${money(closing.depositsPesos)}`,
     `Retiros;${money(closing.withdrawalsPesos)}`,
+    '',
+    'Detalle de movimientos',
+    ...closing.movements.map((row) =>
+      `${row.type};${money(row.amountPesos)};${row.reason};${row.expenseCategoryName ?? ''}`),
     '',
     'Gastos de caja',
     ...closing.cashExpensesByCategory.map((row) => `${row.name};${money(row.amountPesos)}`),

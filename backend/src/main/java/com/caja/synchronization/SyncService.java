@@ -143,6 +143,16 @@ public class SyncService {
       ShiftApplicationService.validateClose(counted, toBreakdown(payload.get("countedBreakdown")),
           (String) payload.get("closeNote"));
     }
+    if ("CASH_MOVEMENT".equals(operation.type())) {
+      var category = payload.get("expenseCategoryName");
+      if (category != null) {
+        var name = category.toString().trim();
+        if (name.isEmpty() || name.length() > 100) {
+          throw new IllegalArgumentException(
+              "La categoria de gasto debe tener entre 1 y 100 caracteres");
+        }
+      }
+    }
     if ("CREATE_SALE".equals(operation.type())) {
       var command = toSaleCommand(operation, batch);
       var overrides = command.items().stream()

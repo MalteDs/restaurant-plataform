@@ -217,6 +217,16 @@ class SyncIT {
         Integer.class, ctx.tenantId()));
   }
 
+  @Test void cashExpenseCategoryMustBeValid() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-long-category", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "x".repeat(101), Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
   @Test void correctionVoidsOldAndCreatesNew() throws Exception {
     var ctx = fixture();
     category(ctx, "Fruver");
