@@ -81,7 +81,8 @@ it('anula un movimiento y restaura el esperado', async () => {
   })
   await voidCashMovement(db, out.movementId)
   expect(await expectedCash(db, 'shift-1')).toBe(50000)
-  const op = await db.operations.where('type').equals('CASH_MOVEMENT').last()
+  const op = (await db.operations.where('type').equals('CASH_MOVEMENT').toArray())
+    .find((operation) => (operation.payload as { voided?: boolean }).voided === true)
   expect(op?.payload).toMatchObject({ voided: true, replacesMovementId: out.movementId })
 })
 
