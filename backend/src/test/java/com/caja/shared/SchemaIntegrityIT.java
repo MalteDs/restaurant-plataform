@@ -38,6 +38,17 @@ class SchemaIntegrityIT {
         .filter(table -> !actual.contains(table)).toList());
   }
 
+  @Test void cajaColumnsExist() {
+    var columns = jdbc.queryForList(
+        "select table_name || '.' || column_name from information_schema.columns "
+            + "where table_schema = 'public'", String.class);
+    assertTrue(columns.containsAll(Set.of(
+        "shifts.counted_breakdown", "shifts.close_note",
+        "cash_movements.voided_at", "cash_movements.voided_by",
+        "cash_movements.replaces_movement_id",
+        "expenses.cash_movement_id", "expenses.voided_at", "expenses.voided_by")));
+  }
+
   @Test void refundMustEqualTheSaleTotal() {
     var ctx = fixture();
     var saleId = insertSale(ctx, 16500, "ALM-A-000001", 1);

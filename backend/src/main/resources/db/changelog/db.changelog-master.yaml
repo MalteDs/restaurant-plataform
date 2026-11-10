@@ -13,3 +13,5 @@ databaseChangeLog:
       file: db/changelog/023-split-payments.yaml
   - include:
       file: db/changelog/024-expense-categories.yaml
+  - include:
+      file: db/changelog/025-caja-operacion.yaml
