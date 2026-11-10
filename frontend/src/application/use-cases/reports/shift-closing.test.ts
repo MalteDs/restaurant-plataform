@@ -90,6 +90,9 @@ it('exporta CSV con secciones y sin perder tildes', async () => {
 
   expect(text).toContain('Apertura')
   expect(text).toContain('Ventas por medio')
+  expect(text).toContain('Detalle de movimientos')
+  expect(text).toContain('cambio')
+  expect(text).toContain('lechuga')
   expect(text).toContain('Gastos de caja')
   expect(text).toContain('Arqueo')
   expect(text).toContain('Denominaciones')

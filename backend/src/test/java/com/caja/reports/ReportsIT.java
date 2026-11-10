@@ -124,6 +124,14 @@ class ReportsIT {
         .andExpect(status().isBadRequest());
   }
 
+  @Test void cashierCannotReadSummary() throws Exception {
+    var ctx = fixture();
+
+    mvc.perform(get("/api/reports/summary")
+            .header("Authorization", "Bearer " + token(ctx, "cajero_resumen", "CASHIER")))
+        .andExpect(status().isForbidden());
+  }
+
   @Test void cashierCanReadExpenseCategories() throws Exception {
     var ctx = fixture();
     createCategory(ctx, "Fruver", "admin_categorias");
