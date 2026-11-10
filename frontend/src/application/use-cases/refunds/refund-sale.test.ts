@@ -32,8 +32,7 @@ async function seedPaidSale(totalPesos: number) {
   return db
 }
 
-it('devuelve offline con motivo y encola la operación', async () => {
-  const db = await seedPaidSale(16500)
+it('devuelve offline con motivo y encola la operación', async () => {  const db = await seedPaidSale(16500)
 
   await expect(refundSale({ saleId: 'sale-1', reason: '', method: 'CASH', userId: 'u1' }, db))
     .rejects.toThrow()
@@ -51,4 +50,19 @@ it('devuelve offline con motivo y encola la operación', async () => {
   expect(operation?.payload).toMatchObject({
     saleId: 'sale-1', reason: 'cobro equivocado', method: 'CARD'
   })
+})
+
+it('exige un motivo de entre 5 y 200 caracteres', async () => {
+  const db = await seedPaidSale(16500)
+
+  await expect(refundSale(
+    { saleId: 'sale-1', reason: '    ', method: 'CASH', userId: 'u1' }, db
+  )).rejects.toThrow('El motivo debe tener entre 5 y 200 caracteres')
+  await expect(refundSale(
+    { saleId: 'sale-1', reason: 'abcd', method: 'CASH', userId: 'u1' }, db
+  )).rejects.toThrow('El motivo debe tener entre 5 y 200 caracteres')
+
+  await expect(refundSale(
+    { saleId: 'sale-1', reason: 'abcde', method: 'CASH', userId: 'u1' }, db
+  )).resolves.toMatchObject({ amountPesos: 16500 })
 })
