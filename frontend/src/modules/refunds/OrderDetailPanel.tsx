@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { db, type CajaDb, type RefundRow } from '../../infrastructure/database/schema'
 import { refundSale, type RefundInput } from '../../application/use-cases/refunds/refund-sale'
+import { bogotaDate } from '../../shared/dates'
 import {
   PAYMENT_LABELS,
   loadReceiptData,
@@ -18,7 +19,8 @@ interface OrderDetailPanelProps {
   onChanged: () => void
 }
 
-type Detail = ReceiptData & { refund: RefundRow | null }
+type DetailRefund = Pick<RefundRow, 'amountPesos' | 'method' | 'reason' | 'operationalDate'>
+type Detail = ReceiptData & { refund: DetailRefund | null }
 
 const dateTime = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
@@ -79,12 +81,24 @@ export default function OrderDetailPanel({
     setMessage('')
     setSubmitting(true)
     try {
+      const refundReason = reason.trim()
+      const refundMethod = method
       const result = await refundSale({ saleId, reason, method }, database)
+      // Update from the result instead of re-reading IndexedDB, which can lag under load.
+      setDetail((current) => current ? {
+        ...current,
+        sale: { ...current.sale, status: 'REFUNDED' },
+        refund: {
+          amountPesos: result.amountPesos,
+          method: refundMethod,
+          reason: refundReason,
+          operationalDate: bogotaDate()
+        }
+      } : current)
       setMessage(`Devolución de ${money(result.amountPesos)} registrada`)
       setRefunding(false)
       setReason('')
       setMethod('CASH')
-      await load()
       onChanged()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo devolver')
