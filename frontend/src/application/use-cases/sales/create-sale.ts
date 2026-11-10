@@ -140,7 +140,7 @@ export async function createSale(
         deliveryFeePesos: input.deliveryFeePesos ?? 0
       })
       await database.saleItems.bulkAdd(
-        input.items.map((item) => {
+        input.items.map((item, index) => {
           const override = item.unitPricePesos !== item.catalogUnitPricePesos
           return {
             id: crypto.randomUUID(),
@@ -155,6 +155,8 @@ export async function createSale(
             overrideUserId: override ? userId : null,
             costPesos: item.costPesos,
             lineTotalPesos: lineTotal(item),
+            note: item.note ?? null,
+            lineNumber: index + 1,
             modifiers: item.modifiers,
             components: item.components
           }
