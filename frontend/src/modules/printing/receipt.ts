@@ -14,7 +14,7 @@ export interface ReceiptData {
   deviceCode: string | null
 }
 
-const PAYMENT_LABELS: Record<PaymentRow['method'], string> = {
+export const PAYMENT_LABELS: Record<PaymentRow['method'], string> = {
   CASH: 'Efectivo',
   CARD: 'Tarjeta',
   BREB: 'Bre-B'
@@ -62,7 +62,7 @@ function money(value: number): string {
   return `$${value.toLocaleString('es-CO')}`
 }
 
-function typeLabel(sale: SaleRow): string {
+export function saleTypeLabel(sale: SaleRow): string {
   if (sale.type === 'COUNTER') {
     return 'Mostrador'
   }
@@ -178,7 +178,7 @@ export function buildReceiptHtml(data: ReceiptData): string {
   <div class="meta">
     <div>Código: ${escapeHtml(sale.displayCode)}</div>
     <div>Fecha: ${escapeHtml(date)}</div>
-    <div>Venta: ${escapeHtml(typeLabel(sale))}</div>
+    <div>Venta: ${escapeHtml(saleTypeLabel(sale))}</div>
     <div>Cajero: ${escapeHtml(cashierName)}</div>
   </div>
   <hr>
