@@ -219,9 +219,9 @@
 - Combos editables con componentes y cantidades desde Administración.
 - Ingredientes y recetas de una línea para productos y adicionales (`ingredients`, `recipe_items`).
 - Reporte de consumo teórico con merma incluida y cobertura de recetas; advierte si la cobertura es menor al 80 %.
-- Migraciones nuevas: `026-catalog-addons`, `027-product-day-prices`, `028-ingredients-recipes`.
-- Compatibilidad: los payloads de sync con `modifiers` siguen funcionando; los grupos de modificadores quedan congelados para el historial y clientes anteriores.
-- Verificación automatizada: backend `./mvnw verify` → 176 pruebas, 0 fallos; frontend `npm test` → 159 pruebas, 0 fallos; `npm run build` correcto.
+- Migraciones nuevas: `026-catalog-addons`, `027-product-day-prices`, `028-ingredients-recipes`, `029-bump-catalog-version`.
+- Compatibilidad: los payloads de sync con `modifiers` siguen funcionando; los grupos de modificadores quedan congelados para el historial y clientes anteriores. `029` fuerza a las cajas ya sincronizadas a bajar el catálogo nuevo.
+- Verificación automatizada: backend `./mvnw verify` → 182 pruebas, 0 fallos; frontend `npm test` → 164 pruebas, 0 fallos; `npm run build` correcto.
 - Pendiente manual: probar con datos reales el alta de adicionales, ingredientes, combo “Voz y Yo” con precio de lunes a jueves y el reporte de consumo. Revisar el resultado de `addons` si producción trae modificadores con nombres duplicados.
 
 ## Decisiones pendientes

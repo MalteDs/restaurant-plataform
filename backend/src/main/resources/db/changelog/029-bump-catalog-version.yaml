@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 029-bump-catalog-version
+      author: caja
+      changes:
+        - sql:
+            sql: UPDATE locations SET catalog_version = catalog_version + 1;

@@ -96,10 +96,14 @@ export default function ReportsScreen() {
                   </li>
                 ))}
               </ul>
+            </>
+          ) : null}
+          {summary.recipeCoveragePercent !== undefined ? (
+            <>
               <p className="mt-2 text-sm text-gray-600">
-                Cobertura de recetas: {(summary.recipeCoveragePercent ?? 0).toLocaleString('es-CO')} %
+                Cobertura de recetas: {summary.recipeCoveragePercent.toLocaleString('es-CO')} %
               </p>
-              {(summary.recipeCoveragePercent ?? 0) < 80 ? (
+              {summary.recipeCoveragePercent < 80 ? (
                 <p role="status" className="mt-1 text-sm text-amber-700">
                   El reporte es incompleto: faltan recetas por configurar.
                 </p>

@@ -24,6 +24,7 @@ export default function AddonsPanel({ addons, ingredients, onChanged }: Props) {
   const [price, setPrice] = useState('0')
   const [recipe, setRecipe] = useState<RecipeItemInput[]>(() => emptyRecipe(ingredients))
   const [editing, setEditing] = useState<AdminAddon | null>(null)
+  const [editName, setEditName] = useState('')
   const [editPrice, setEditPrice] = useState('0')
   const [editActive, setEditActive] = useState(true)
   const [editRecipe, setEditRecipe] = useState<RecipeItemInput[]>([])
@@ -88,6 +89,7 @@ export default function AddonsPanel({ addons, ingredients, onChanged }: Props) {
     setNotice('')
     setError('')
     setEditing(addon)
+    setEditName(addon.name)
     setEditPrice(String(addon.pricePesos))
     setEditActive(addon.active)
     setEditRecipe(addon.recipe.length > 0
@@ -102,7 +104,12 @@ export default function AddonsPanel({ addons, ingredients, onChanged }: Props) {
     }
     setError('')
     setNotice('')
+    const trimmed = editName.trim()
     const pricePesos = Number(editPrice)
+    if (!trimmed) {
+      setError('El nombre del adicional es obligatorio')
+      return
+    }
     if (!Number.isInteger(pricePesos) || pricePesos < 0) {
       setError('El precio debe ser un entero mayor o igual a 0')
       return
@@ -117,7 +124,7 @@ export default function AddonsPanel({ addons, ingredients, onChanged }: Props) {
     try {
       await request(`/api/catalog/addons/${editing.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ pricePesos, active: editActive, recipe: rows })
+        body: JSON.stringify({ name: trimmed, pricePesos, active: editActive, recipe: rows })
       })
     } catch {
       setError('No se pudo guardar el adicional')
@@ -139,7 +146,11 @@ export default function AddonsPanel({ addons, ingredients, onChanged }: Props) {
       <h2 className="text-sm font-semibold text-gray-900">Adicionales</h2>
       {editing ? (
         <form className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3" onSubmit={onEdit}>
-          <p className="text-sm font-medium text-gray-700">{editing.name}</p>
+          <label className="block text-sm font-medium text-gray-700">
+            Nombre del adicional
+            <Input className="mt-1" value={editName}
+              onChange={(event) => setEditName(event.target.value)} />
+          </label>
           <label className="mt-2 block text-sm font-medium text-gray-700">
             Precio
             <Input className="mt-1" type="number" min={0} value={editPrice}

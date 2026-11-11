@@ -38,7 +38,10 @@ const snapshot = {
     { id: 'a1', name: 'Tocineta', pricePesos: 5000, active: true, recipe: [] }
   ],
   ingredients: [],
-  modifierGroups: []
+  modifierGroups: [{
+    id: 'g1', name: 'EXTRAS', minSelection: 0, maxSelection: 1,
+    modifiers: [{ id: 'm1', name: 'Queso', additionalPricePesos: 1000 }]
+  }]
 }
 
 it('sincroniza el catalogo y no reescribe si la version no cambio', async () => {
@@ -80,6 +83,7 @@ it('guarda adicionales y precios por dia en la caja local', async () => {
   await syncCatalog(db, async () => snapshot)
 
   expect(await db.addons.count()).toBe(1)
+  expect(await db.modifierGroups.count()).toBe(1)
   expect((await db.products.get('p1'))?.addonIds).toEqual(['a1'])
   expect((await db.products.get('p1'))?.dayPrices).toEqual([{ weekday: 1, pricePesos: 15000 }])
 })

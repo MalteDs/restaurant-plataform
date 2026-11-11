@@ -287,6 +287,7 @@ Cambiosets nuevos:
    - Deja `modifier_groups`, `modifiers`, `product_modifier_groups` y `sale_item_modifiers` intactas.
 2. `027-product-day-prices`: crea `product_day_prices`.
 3. `028-ingredients-recipes`: crea el enum `ingredient_unit`, `ingredients` y `recipe_items`.
+4. `029-bump-catalog-version`: incrementa `locations.catalog_version` para que las cajas ya sincronizadas descarguen los adicionales migrados.
 
 Compatibilidad:
 

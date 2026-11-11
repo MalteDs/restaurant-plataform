@@ -78,6 +78,25 @@ class ReportsIT {
     assertEquals(132.0, ((Number) row(rows, "TOCINETA").get("quantity")).doubleValue());
   }
 
+  @Test void directProductConsumptionAndCoverage() throws Exception {
+    var ctx = fixture();
+    var carne = ingredient(ctx, "CARNE DIRECTA", "UNIT", 0);
+    recipe(ctx, ctx.productId(), carne, 1);
+    saleWithStatus(ctx, ctx.productId(), 2, "CHARGED");
+
+    var summary = summary(ctx);
+    var rows = (List<Map<String, Object>>) summary.get("byIngredient");
+    assertEquals(2.0, ((Number) row(rows, "CARNE DIRECTA").get("quantity")).doubleValue());
+    assertEquals(100.0, ((Number) summary.get("recipeCoveragePercent")).doubleValue());
+  }
+
+  @Test void productWithoutRecipeLowersCoverage() throws Exception {
+    var ctx = fixture();
+    saleWithStatus(ctx, ctx.productId(), 2, "CHARGED");
+
+    assertEquals(0.0, ((Number) summary(ctx).get("recipeCoveragePercent")).doubleValue());
+  }
+
   @Test void summaryExcludesRefundedSalesFromConsumption() throws Exception {
     var ctx = fixture();
     var carne = ingredient(ctx, "CARNE", "UNIT", 0);

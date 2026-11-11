@@ -44,11 +44,11 @@ curl -X POST http://localhost:8080/api/catalog/ingredients \
 curl -X POST http://localhost:8080/api/catalog/addons \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"name":"Tocineta extra","pricePesos":5000,"recipe":[{"ingredientId":"<INGREDIENT_ID>","quantity":30}]}'
-11. Actualizar adicional (ADMIN)
+10b. Actualizar adicional (ADMIN)
 curl -X PUT http://localhost:8080/api/catalog/addons/<ADDON_ID> \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"pricePesos":6000,"active":true,"recipe":[{"ingredientId":"<INGREDIENT_ID>","quantity":30}]}'
-Los grupos de modificadores (`/api/catalog/modifier-groups`) quedan solo por compatibilidad histórica; la administración nueva usa adicionales.
+Los grupos de modificadores quedan solo por compatibilidad histórica; la administración nueva usa adicionales. Sus endpoints heredados siguen vivos: `POST /api/catalog/modifier-groups` y `PUT /api/catalog/modifier-groups/<GROUP_ID>`.
 11. Registrar dispositivo (ADMIN)
 curl -X POST http://localhost:8080/api/devices/register \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \

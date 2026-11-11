@@ -57,11 +57,21 @@ class SchemaIntegrityIT {
         """, String.class, sencillaId);
     assertTrue(addonNames.contains("Carne Angus"));
     assertTrue(addonNames.contains("Papa + Gaseosa Postobon 250ml"));
+    assertEquals(4500L, jdbc.queryForObject(
+        "select price_pesos from addons where name = 'Carne Angus'", Long.class));
+    assertEquals(jdbc.queryForObject("select count(*) from modifiers", Integer.class),
+        jdbc.queryForObject("select count(*) from addons", Integer.class));
     assertEquals(0, jdbc.queryForObject("""
         select count(*) from (
           select location_id, name from addons group by location_id, name having count(*) > 1
         ) duplicates
         """, Integer.class));
+  }
+
+  @Test void addonMigrationBumpsCatalogVersion() {
+    assertTrue(jdbc.queryForObject(
+        "select catalog_version from locations where id = "
+            + "'00000000-0000-4000-8000-0000000003ea'", Long.class) >= 2);
   }
 
   @Test void cajaColumnsExist() {

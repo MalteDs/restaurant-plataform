@@ -35,6 +35,20 @@ it('muestra el consumo de ingredientes y advierte cobertura baja', async () => {
   expect(screen.getByText(/reporte es incompleto/i)).toBeInTheDocument()
 })
 
+it('advierte cobertura cero aunque no haya ingredientes', async () => {
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  vi.mocked(request).mockResolvedValue({
+    expensesPesos: 0,
+    byIngredient: [],
+    recipeCoveragePercent: 0
+  } as never)
+
+  render(<ReportsScreen />)
+
+  expect(await screen.findByText(/cobertura de recetas: 0 %/i)).toBeInTheDocument()
+  expect(screen.getByText(/reporte es incompleto/i)).toBeInTheDocument()
+})
+
 it('muestra todas las ventas locales aunque el servidor aún tenga solo una', async () => {
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
   const today = bogotaDate()

@@ -55,7 +55,8 @@ databaseChangeLog:
               CREATE INDEX sale_item_addons_addon_idx ON sale_item_addons (addon_id);
 
               create temporary table _addon_candidates as
-              select m.id, m.tenant_id, m.location_id, m.name, m.additional_price_pesos, m.active,
+              select m.id, m.tenant_id, m.location_id, m.name, m.additional_price_pesos,
+                     (m.active and g.active) as active,
                      g.name as group_name,
                      row_number() over (partition by m.location_id, m.name
                                         order by m.additional_price_pesos desc, m.active desc,
@@ -75,8 +76,9 @@ databaseChangeLog:
 
               insert into addons(id, tenant_id, location_id, name, price_pesos, active)
               select map.addon_id, c.tenant_id, c.location_id,
-                     case when c.rn = 1 then c.name
-                          else c.name || ' (' || c.group_name || ')' end,
+                     case when c.rn = 1 then left(c.name, 100)
+                          else left(c.name, greatest(0, 100 - length(' (' || c.group_name || ')')))
+                               || ' (' || left(c.group_name, 100) || ')' end,
                      c.additional_price_pesos, c.active
               from _addon_candidates c
               join _addon_map map on map.modifier_id = c.id;

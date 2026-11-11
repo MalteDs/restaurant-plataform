@@ -21,3 +21,5 @@ databaseChangeLog:
       file: db/changelog/027-product-day-prices.yaml
   - include:
       file: db/changelog/028-ingredients-recipes.yaml
+  - include:
+      file: db/changelog/029-bump-catalog-version.yaml

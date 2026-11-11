@@ -82,6 +82,7 @@ export async function syncCatalog(
       await database.categories.bulkPut(remote.categories)
       await database.products.bulkPut(products)
       await database.addons.bulkPut(remote.addons ?? [])
+      await database.modifierGroups.bulkPut(remote.modifierGroups ?? [])
       await database.meta.put({ key: 'catalogVersion', value: remote.version })
     }
   )

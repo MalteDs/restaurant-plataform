@@ -399,8 +399,10 @@ export default function SaleScreen({
                   </h2>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {families.map((family) => {
-                      const first = family.variants[0]?.product
-                      const price = first ? effectivePrice(first, now) : 0
+                      const price = family.variants.length > 0
+                        ? Math.min(...family.variants.map((variant) =>
+                          effectivePrice(variant.product, now)))
+                        : 0
                       return (
                         <button
                           key={family.key}
@@ -719,7 +721,7 @@ export default function SaleScreen({
                   {variant.label}
                 </span>
                 <span className="text-sm text-brand-600">
-                  ${variant.product.pricePesos.toLocaleString('es-CO')}
+                  ${effectivePrice(variant.product, now).toLocaleString('es-CO')}
                 </span>
               </button>
             ))}

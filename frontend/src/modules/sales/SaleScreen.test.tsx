@@ -394,6 +394,32 @@ it('usa el precio del día en la tarjeta y en el cobro', async () => {
   expect(screen.getByText(/total \$30\.000/i)).toBeInTheDocument()
 })
 
+it('muestra el precio del día en el selector de variantes', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  const today = bogotaWeekday(new Date())
+  await db.products.bulkPut([
+    {
+      id: 'p1', name: 'SALCHI TOCI - MAIZ PERSONAL', categoryName: 'SALCHIPAPAS',
+      kind: 'PRODUCT', pricePesos: 18000, costPesos: null, sortOrder: 1, active: true,
+      modifierGroupIds: [], addonIds: [], components: [],
+      dayPrices: [{ weekday: today, pricePesos: 15000 }]
+    },
+    {
+      id: 'p2', name: 'SALCHI TOCI - MAIZ MEDIANA 2P', categoryName: 'SALCHIPAPAS',
+      kind: 'PRODUCT', pricePesos: 24000, costPesos: null, sortOrder: 1, active: true,
+      modifierGroupIds: [], addonIds: [], components: [],
+      dayPrices: [{ weekday: today, pricePesos: 20000 }]
+    }
+  ])
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /salchi toci - maiz/i }))
+
+  expect(screen.getByRole('button', { name: /personal.*\$15\.000/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /personal.*\$18\.000/i })).not.toBeInTheDocument()
+})
+
 it('muestra los adicionales elegidos en el carrito', async () => {
   const db = await productWithAddons()
 

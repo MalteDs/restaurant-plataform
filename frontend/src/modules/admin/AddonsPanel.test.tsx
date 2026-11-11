@@ -51,10 +51,14 @@ it('edita el precio y el estado de un adicional', async () => {
   )
 
   await userEvent.click(screen.getByRole('button', { name: /editar/i }))
+  await userEvent.clear(screen.getByLabelText(/nombre del adicional/i))
+  await userEvent.type(screen.getByLabelText(/nombre del adicional/i), 'Tocineta doble')
   await userEvent.clear(screen.getByLabelText(/^precio$/i))
   await userEvent.type(screen.getByLabelText(/^precio$/i), '6000')
   await userEvent.click(screen.getByRole('button', { name: /guardar adicional/i }))
 
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/catalog/addons/a1',
     expect.objectContaining({ method: 'PUT' })))
+  const body = JSON.parse(String(vi.mocked(request).mock.calls[0][1]?.body))
+  expect(body).toMatchObject({ name: 'Tocineta doble', pricePesos: 6000 })
 })

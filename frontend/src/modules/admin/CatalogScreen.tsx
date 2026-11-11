@@ -244,7 +244,8 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
                 addons={addons}
                 ingredients={ingredients}
                 productOptions={products.filter((row) =>
-                  row.kind === 'PRODUCT' && row.id !== (editing === 'new' ? '' : editing.id))}
+                  row.kind === 'PRODUCT' && row.active
+                  && row.id !== (editing === 'new' ? '' : editing.id))}
                 onSave={saveProduct}
                 onCancel={() => setEditing(null)}
               />
