@@ -3,6 +3,7 @@ import type { CajaDb, CashMovementRow, ShiftRow } from '../../infrastructure/dat
 import { db } from '../../infrastructure/database/schema'
 import { availableExpenseCategories } from '../../application/use-cases/expenses/expense-categories'
 import { expectedCash } from '../../application/use-cases/shifts/close-shift'
+import { shiftClosing, type ShiftClosing } from '../../application/use-cases/reports/shift-closing'
 import { openShift } from '../../application/use-cases/shifts/open-shift'
 import {
   editCashMovement,
@@ -24,6 +25,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
   const [current, setCurrent] = useState<ShiftRow | null>(null)
   const [expected, setExpected] = useState(0)
   const [movements, setMovements] = useState<CashMovementRow[]>([])
+  const [closing, setClosing] = useState<ShiftClosing | null>(null)
   const [history, setHistory] = useState<ShiftRow[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [userNames, setUserNames] = useState(new Map<string, string>())
@@ -45,12 +47,14 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
     const rows = latest
       ? await database.cashMovements.where('shiftId').equals(latest.id).toArray()
       : []
+    const summary = latest ? await shiftClosing(database, latest.id) : null
     const available = await availableExpenseCategories(database)
     const users = await database.users.toArray()
     setOpen(openShift)
     setCurrent(latest)
     setExpected(expectedPesos)
     setMovements(rows)
+    setClosing(summary)
     setHistory(shifts
       .filter((shift) => shift.closedAt !== null)
       .sort((left, right) => right.openedAt.localeCompare(left.openedAt)))
@@ -254,7 +258,8 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
 
           <div>
             {open ? (
-              <ShiftClosePanel database={database} expectedPesos={expected} onClosed={onClosed} />
+              <ShiftClosePanel database={database} expectedPesos={expected}
+                summary={closing} onClosed={onClosed} />
             ) : (
               openForm
             )}
