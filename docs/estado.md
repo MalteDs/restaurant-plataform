@@ -1,6 +1,6 @@
 # Estado de implementación — Caja v1
 
-**Última actualización:** 2026-11-10
+**Última actualización:** 2026-11-11
 **Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos + operación de caja implementados; prueba física pendiente.
 **Tarea en curso:** ninguna.
 **Último commit de implementación:** ver `git log -1` (detalle de pedidos).
@@ -132,6 +132,33 @@
 - Las categorías se siembran en el dispositivo y se actualizan desde el servidor cuando hay conexión.
 - Límite conocido: el historial de turnos es del dispositivo. Ver turnos de otras cajas o sedes requiere un endpoint central y queda fuera.
 - Decisión pendiente con los dueños: cómo consolidan gastos y cierres entre las tres sedes.
+
+## Menú editable y caja de turno real (2026-11-11)
+
+- [x] Tarea 1 — Snapshot administrativo con inactivos
+- [x] Tarea 2 — Asignación de grupos de modificadores a productos
+- [x] Tarea 3 — Gestión de productos en Administración
+- [x] Tarea 4 — Gestión de categorías
+- [x] Tarea 5 — Gestión de grupos de modificadores
+- [x] Tarea 6 — Vuelto en el cobro de efectivo
+- [x] Tarea 7 — Resumen del turno y confirmación de cierre
+- [x] Tarea 8 — E2E, documentación y verificación
+
+### Verificación
+
+- Backend: `./mvnw verify` → pruebas verdes.
+- Frontend: `npm test` → pruebas verdes; `npm run build` correcto.
+- E2E: `npx playwright test e2e/menu-cash-pilot.spec.ts` → 2 escenarios verdes.
+
+### Notas de la iteración
+
+- El menú se administra desde Administración: productos (nombre, categoría, precio, costo, activo y días), categorías y grupos de modificadores.
+- `GET /api/catalog/admin` incluye inactivos y exige ADMIN. `GET /api/catalog` sigue devolviendo solo activos para la venta.
+- Los productos aceptan `modifierGroupIds` al crearse o editarse. Lista vacía quita todos los grupos.
+- Al guardar un cambio de menú, el dispositivo que guarda refresca su catálogo local. Otros dispositivos esperan al intervalo de 30 minutos.
+- La caja muestra el vuelto del pago en efectivo y bloquea el cobro si el efectivo recibido no alcanza.
+- Antes de cerrar, el turno muestra ventas por medio, devoluciones, ingresos, retiros, gastos y efectivo esperado. El cierre siempre pide confirmación.
+- Límites conocidos: los componentes de combos y las opciones de un grupo ya creado no se editan desde la interfaz; un costo guardado no se puede volver a `null`, solo a `0`; el resumen del turno es del dispositivo.
 
 ## Notas de la sesión
 

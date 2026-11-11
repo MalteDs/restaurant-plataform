@@ -95,6 +95,7 @@ export default function ProductForm({
         <label className="block text-sm font-medium text-gray-700">
           Categoría
           <select
+            aria-label="Categoría"
             className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
             value={categoryId ?? ''}
             onChange={(event) => setCategoryId(event.target.value)}

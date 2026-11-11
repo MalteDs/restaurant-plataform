@@ -115,6 +115,7 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
                 <label className="block text-sm font-medium text-gray-700">
                   Filtrar por categoría
                   <select
+                    aria-label="Filtrar por categoría"
                     className="mt-1 w-48 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                     value={categoryFilter}
                     onChange={(event) => setCategoryFilter(event.target.value)}

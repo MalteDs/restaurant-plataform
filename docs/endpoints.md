@@ -115,3 +115,7 @@ curl -X PUT http://localhost:8080/api/expenses/categories/<CATEGORY_ID> \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"name":"Domicilios","active":false}'
 Una categoría inactiva no se puede usar en gastos nuevos. El gasto conserva el nombre con el que se registró.
+26. Snapshot administrativo del catálogo (ADMIN)
+curl http://localhost:8080/api/catalog/admin \
+  -H "Authorization: Bearer <TOKEN>"
+Incluye categorías, productos y grupos de modificadores inactivos para poder reactivarlos. La caja sigue usando `GET /api/catalog`, que solo devuelve activos. Un CASHIER recibe 403.
