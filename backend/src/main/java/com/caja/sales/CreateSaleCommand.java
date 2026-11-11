@@ -45,16 +45,23 @@ public record CreateSaleCommand(UUID saleId, UUID tenantId, UUID locationId, UUI
   public static long lineTotal(ItemCommand item) {
     var modifiers = item.modifiers().stream()
         .mapToLong(ModifierCommand::additionalPricePesos).sum();
-    return (long) item.quantity() * (item.unitPricePesos() + modifiers);
+    var addons = item.addons().stream()
+        .mapToLong(addon -> addon.additionalPricePesos() * addon.quantity()).sum();
+    return (long) item.quantity() * (item.unitPricePesos() + modifiers + addons);
   }
 
   public record ItemCommand(UUID productId, String productName, String categoryName, int quantity,
                             long unitPricePesos, Long costPesos, String note,
-                            List<ModifierCommand> modifiers, List<ComponentCommand> components,
+                            List<ModifierCommand> modifiers, List<AddonCommand> addons,
+                            List<ComponentCommand> components,
                             long catalogUnitPricePesos, String overrideReason) {
   }
 
   public record ModifierCommand(UUID modifierId, String modifierName, long additionalPricePesos) {
+  }
+
+  public record AddonCommand(UUID addonId, String addonName, long additionalPricePesos,
+                             int quantity) {
   }
 
   public record ComponentCommand(UUID productId, String name, int quantity) {

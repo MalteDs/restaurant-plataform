@@ -133,6 +133,20 @@ class SyncIT {
             + "(select id from sales where tenant_id = ?)", Long.class, ctx.tenantId()));
   }
 
+  @Test void addonsWithQuantityChangeTheTotalAndAreFrozen() throws Exception {
+    var ctx = fixture();
+    var addonId = addon(ctx, "TOCINETA", 5000);
+
+    var result = push(ctx, List.of(
+        saleOperationWithAddons(ctx, "op-addons", 1, 16500, addonId, 2, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(26500L, jdbc.queryForObject(
+        "select total_pesos from sales where tenant_id = ?", Long.class, ctx.tenantId()));
+    assertEquals(2, jdbc.queryForObject(
+        "select quantity from sale_item_addons where tenant_id = ?", Integer.class, ctx.tenantId()));
+  }
+
   @Test void splitPaymentsThroughSyncAreApplied() throws Exception {
     var ctx = fixture();
     var result = push(ctx, List.of(splitSaleOperation(ctx, "op-split", 1, 20000, Instant.now())));
@@ -439,6 +453,42 @@ class SyncIT {
       item.put("catalogUnitPricePesos", catalogPrice);
       item.put("overrideReason", overrideReason);
     }
+    return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
+        Map.of(
+            "type", "COUNTER",
+            "shiftId", ctx.shiftId().toString(),
+            "method", "CASH",
+            "deliveryFeePesos", 0,
+            "displayCode", "ALM-A-" + String.format("%06d", seq),
+            "deviceSeq", seq,
+            "items", List.of(item)));
+  }
+
+  private UUID addon(Ctx ctx, String name, long pricePesos) {
+    var id = UUID.randomUUID();
+    jdbc.update("insert into addons(id, tenant_id, location_id, name, price_pesos) "
+        + "values (?, ?, ?, ?, ?)", id, ctx.tenantId(), ctx.locationId(), name, pricePesos);
+    return id;
+  }
+
+  private SyncOperation saleOperationWithAddons(Ctx ctx, String operationId, long seq,
+                                                long unitPrice, UUID addonId,
+                                                int addonQuantity, Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var saleId = UUID.randomUUID();
+    var item = new java.util.HashMap<String, Object>();
+    item.put("productId", ctx.productId().toString());
+    item.put("productName", "SENCILLA");
+    item.put("categoryName", "HAMBURGUESAS");
+    item.put("quantity", 1);
+    item.put("unitPricePesos", unitPrice);
+    item.put("modifiers", List.of());
+    item.put("addons", List.of(Map.of(
+        "addonId", addonId.toString(),
+        "addonName", "TOCINETA",
+        "additionalPricePesos", 5000,
+        "quantity", addonQuantity)));
+    item.put("components", List.of());
     return new SyncOperation(id, seq, "CREATE_SALE", saleId, ctx.userId(), clientCreatedAt,
         Map.of(
             "type", "COUNTER",

@@ -146,6 +146,14 @@ public class SaleApplicationService {
           """, itemId, modifier.modifierId(), modifier.modifierName(),
           modifier.additionalPricePesos(), command.tenantId(), command.locationId());
     }
+    for (var addon : item.addons()) {
+      jdbc.update("""
+          insert into sale_item_addons(sale_item_id, addon_id, addon_name,
+                                       additional_price_pesos, quantity, tenant_id, location_id)
+          values (?, ?, ?, ?, ?, ?, ?)
+          """, itemId, addon.addonId(), addon.addonName(), addon.additionalPricePesos(),
+          addon.quantity(), command.tenantId(), command.locationId());
+    }
     for (var component : item.components()) {
       jdbc.update("""
           insert into sale_item_components(sale_item_id, component_product_id, component_name,

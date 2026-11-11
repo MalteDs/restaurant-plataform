@@ -281,7 +281,8 @@ class SaleApplicationIT {
                                         List<CreateSaleCommand.ModifierCommand> modifiers,
                                         CreateSaleCommand.PaymentCommand... payments) {
     var items = List.of(new CreateSaleCommand.ItemCommand(productId, "Producto", "HAMBURGUESAS",
-        quantity, unitPrice, null, null, modifiers, List.of(), catalogPrice, overrideReason));
+        quantity, unitPrice, null, null, modifiers, List.of(), List.of(), catalogPrice,
+        overrideReason));
     return new CreateSaleCommand(java.util.UUID.randomUUID(), ctx.tenantId(), ctx.locationId(),
         ctx.deviceId(), ctx.userId(),
         ctx.shiftId(), SaleType.COUNTER, null, 0, items, List.of(payments),
