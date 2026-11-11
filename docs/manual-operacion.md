@@ -16,8 +16,8 @@
 
 ## Movimientos de caja
 
-- Con el turno abierto, usa **Registrar ingreso** o **Registrar retiro** y escribe monto y motivo (5 a 200 caracteres).
-- Para un gasto pagado con efectivo de la caja, usa **Registrar gasto de caja**, marca **Es gasto** y elige la categoría. El gasto baja el efectivo esperado y aparece en Reportes.
+- Con el turno abierto, toca **Registrar movimiento**, elige **Ingreso** o **Retiro**, y escribe monto y motivo (5 a 200 caracteres).
+- Para un gasto pagado con efectivo de la caja, elige **Retiro**, marca **Es gasto** y elige la categoría. El gasto baja el efectivo esperado y aparece en Reportes.
 - Un movimiento se puede **Editar** o **Anular** mientras el turno esté abierto. El movimiento viejo queda anulado con usuario y fecha; no se borra.
 - Al cerrar el turno ya no se edita ni se anula.
 
