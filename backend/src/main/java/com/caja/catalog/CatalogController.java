@@ -3,6 +3,8 @@ package com.caja.catalog;
 import com.caja.identity.AuthenticatedUser;
 import com.caja.shared.tenant.TenantId;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,6 +12,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Max;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -66,6 +69,52 @@ public class CatalogController {
         request.categoryId(), request.pricePesos(), request.costPesos(), request.active(),
         request.saleDays(), request.modifierGroupIds());
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/addons")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Map<String, Object>> createAddon(
+      @Valid @RequestBody AddonRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var id = catalog.createAddon(new TenantId(user.tenantId()), user.locationId(),
+        request.name(), request.pricePesos(), request.active(), recipe(request.recipe()));
+    return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
+  }
+
+  @PutMapping("/addons/{id}")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Void> updateAddon(@PathVariable UUID id,
+                                          @Valid @RequestBody AddonUpdate request,
+                                          @AuthenticationPrincipal AuthenticatedUser user) {
+    catalog.updateAddon(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
+        request.pricePesos(), request.active(), recipe(request.recipe()));
+    return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/ingredients")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Map<String, Object>> createIngredient(
+      @Valid @RequestBody IngredientRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var id = catalog.createIngredient(new TenantId(user.tenantId()), user.locationId(),
+        request.name(), request.unit(), request.wastePercent());
+    return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
+  }
+
+  @PutMapping("/ingredients/{id}")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<Void> updateIngredient(@PathVariable UUID id,
+                                               @Valid @RequestBody IngredientUpdate request,
+                                               @AuthenticationPrincipal AuthenticatedUser user) {
+    catalog.updateIngredient(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
+        request.unit(), request.wastePercent(), request.active());
+    return ResponseEntity.noContent().build();
+  }
+
+  private static List<CatalogService.RecipeItemInput> recipe(List<RecipeItemRequest> items) {
+    return items == null ? null : items.stream()
+        .map(item -> new CatalogService.RecipeItemInput(item.ingredientId(), item.quantity()))
+        .toList();
   }
 
   @PostMapping("/categories")
@@ -149,5 +198,32 @@ public class CatalogController {
 
   public record ModifierRequest(@NotBlank @Size(max = 100) String name,
                                  @NotNull @PositiveOrZero Long additionalPricePesos) {
+  }
+
+  public record AddonRequest(@NotBlank @Size(max = 100) String name,
+                             @NotNull @PositiveOrZero Long pricePesos,
+                             Boolean active,
+                             List<@NotNull @Valid RecipeItemRequest> recipe) {
+  }
+
+  public record AddonUpdate(@Size(max = 100) String name,
+                            @PositiveOrZero Long pricePesos,
+                            Boolean active,
+                            List<@NotNull @Valid RecipeItemRequest> recipe) {
+  }
+
+  public record IngredientRequest(@NotBlank @Size(max = 100) String name,
+                                  @NotBlank @Pattern(regexp = "UNIT|GRAM") String unit,
+                                  @DecimalMin("0") @DecimalMax("100") BigDecimal wastePercent) {
+  }
+
+  public record IngredientUpdate(@Size(max = 100) String name,
+                                 @Pattern(regexp = "UNIT|GRAM") String unit,
+                                 @DecimalMin("0") @DecimalMax("100") BigDecimal wastePercent,
+                                 Boolean active) {
+  }
+
+  public record RecipeItemRequest(@NotNull UUID ingredientId,
+                                  @NotNull @DecimalMin("0.001") BigDecimal quantity) {
   }
 }

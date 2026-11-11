@@ -1,14 +1,19 @@
 package com.caja.catalog;
 
+import com.caja.catalog.CatalogSnapshot.AddonView;
 import com.caja.catalog.CatalogSnapshot.CategoryView;
 import com.caja.catalog.CatalogSnapshot.ComponentView;
+import com.caja.catalog.CatalogSnapshot.IngredientView;
 import com.caja.catalog.CatalogSnapshot.ModifierGroupView;
 import com.caja.catalog.CatalogSnapshot.ModifierView;
 import com.caja.catalog.CatalogSnapshot.ProductView;
+import com.caja.catalog.CatalogSnapshot.RecipeItemView;
 import com.caja.audit.AuditService;
 import com.caja.shared.tenant.TenantId;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +73,8 @@ public class CatalogService {
         rs.getString("category_name"), rs.getString("kind"),
         rs.getString("name"), rs.getLong("price_pesos"),
         (Long) rs.getObject("cost_pesos"), rs.getInt("sort_order"), rs.getBoolean("active"),
-        new ArrayList<>(), new ArrayList<>(), parseSaleDays(rs.getString("sale_days"))),
+        new ArrayList<>(), new ArrayList<>(), parseSaleDays(rs.getString("sale_days")),
+        new ArrayList<>(), new ArrayList<>(), new ArrayList<>()),
         tenantId.value(), locationId, includeInactive);
 
     var groups = jdbc.query("""
@@ -117,6 +123,36 @@ public class CatalogService {
         .add(new ComponentView(rs.getObject("component_product_id", UUID.class),
             rs.getString("name"), rs.getInt("quantity"))), tenantId.value(), locationId);
 
+    var addons = jdbc.query("""
+        select id, name, price_pesos, active
+        from addons
+        where tenant_id = ? and location_id = ? and (? or active)
+        order by name
+        """, (rs, rowNum) -> new AddonView(
+        rs.getObject("id", UUID.class), rs.getString("name"), rs.getLong("price_pesos"),
+        rs.getBoolean("active"), new ArrayList<>()), tenantId.value(), locationId, includeInactive);
+
+    var addonRecipes = new LinkedHashMap<UUID, List<RecipeItemView>>();
+    jdbc.query("""
+        select addon_id, ingredient_id, quantity
+        from recipe_items
+        where tenant_id = ? and location_id = ? and addon_id is not null
+        order by ingredient_id
+        """, (RowCallbackHandler) rs -> addonRecipes
+        .computeIfAbsent(rs.getObject("addon_id", UUID.class), key -> new ArrayList<>())
+        .add(new RecipeItemView(rs.getObject("ingredient_id", UUID.class),
+            rs.getBigDecimal("quantity"))), tenantId.value(), locationId);
+
+    var ingredients = jdbc.query("""
+        select id, name, unit, waste_percent, active
+        from ingredients
+        where tenant_id = ? and location_id = ? and (? or active)
+        order by name
+        """, (rs, rowNum) -> new IngredientView(
+        rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("unit"),
+        rs.getBigDecimal("waste_percent"), rs.getBoolean("active")),
+        tenantId.value(), locationId, includeInactive);
+
     var productsById = new LinkedHashMap<UUID, ProductView>();
     for (var product : products) {
       product.modifierGroupIds().addAll(groupsByProduct.getOrDefault(product.id(), List.of()));
@@ -126,8 +162,11 @@ public class CatalogService {
     for (var group : groups) {
       group.modifiers().addAll(modifiersByGroup.getOrDefault(group.id(), List.of()));
     }
+    for (var addon : addons) {
+      addon.recipe().addAll(addonRecipes.getOrDefault(addon.id(), List.of()));
+    }
 
-    return new CatalogSnapshot(version, categories, products, groups);
+    return new CatalogSnapshot(version, categories, products, groups, addons, ingredients);
   }
 
   @Transactional
@@ -277,6 +316,125 @@ public class CatalogService {
     bumpVersion(tenantId, locationId);
   }
 
+  @Transactional
+  public UUID createAddon(TenantId tenantId, UUID locationId, String name, long pricePesos,
+                          Boolean active, List<RecipeItemInput> recipe) {
+    var id = UUID.randomUUID();
+    try {
+      jdbc.update("""
+          insert into addons(id, tenant_id, location_id, name, price_pesos, active)
+          values (?, ?, ?, ?, ?, ?)
+          """, id, tenantId.value(), locationId, name, pricePesos, active == null || active);
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "El adicional ya existe o es invalido");
+    }
+    replaceRecipe(tenantId, locationId, null, id, recipe);
+    bumpVersion(tenantId, locationId);
+    audit.record(tenantId.value(), locationId, null, "CATALOG_ADDON_CREATED", "addon", id,
+        Map.of("name", name, "pricePesos", pricePesos));
+    return id;
+  }
+
+  @Transactional
+  public void updateAddon(TenantId tenantId, UUID locationId, UUID addonId, String name,
+                          Long pricePesos, Boolean active, List<RecipeItemInput> recipe) {
+    if (name != null && name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
+    }
+    var updated = jdbc.update("""
+        update addons
+        set name = coalesce(?, name), price_pesos = coalesce(?, price_pesos),
+            active = coalesce(?, active), updated_at = now()
+        where id = ? and tenant_id = ? and location_id = ?
+        """, name, pricePesos, active, addonId, tenantId.value(), locationId);
+    if (updated == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Adicional no encontrado");
+    }
+    replaceRecipe(tenantId, locationId, null, addonId, recipe);
+    bumpVersion(tenantId, locationId);
+  }
+
+  @Transactional
+  public UUID createIngredient(TenantId tenantId, UUID locationId, String name, String unit,
+                               BigDecimal wastePercent) {
+    var id = UUID.randomUUID();
+    try {
+      jdbc.update("""
+          insert into ingredients(id, tenant_id, location_id, name, unit, waste_percent)
+          values (?, ?, ?, ?, ?::ingredient_unit, ?)
+          """, id, tenantId.value(), locationId, name, unit,
+          wastePercent == null ? BigDecimal.ZERO : wastePercent);
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "El ingrediente ya existe o es invalido");
+    }
+    bumpVersion(tenantId, locationId);
+    audit.record(tenantId.value(), locationId, null, "CATALOG_INGREDIENT_CREATED", "ingredient",
+        id, Map.of("name", name, "unit", unit));
+    return id;
+  }
+
+  @Transactional
+  public void updateIngredient(TenantId tenantId, UUID locationId, UUID ingredientId, String name,
+                               String unit, BigDecimal wastePercent, Boolean active) {
+    if (name != null && name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
+    }
+    var updated = jdbc.update("""
+        update ingredients
+        set name = coalesce(?, name), unit = coalesce(?::ingredient_unit, unit),
+            waste_percent = coalesce(?, waste_percent), active = coalesce(?, active),
+            updated_at = now()
+        where id = ? and tenant_id = ? and location_id = ?
+        """, name, unit, wastePercent, active, ingredientId, tenantId.value(), locationId);
+    if (updated == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ingrediente no encontrado");
+    }
+    bumpVersion(tenantId, locationId);
+  }
+
+  private void replaceRecipe(TenantId tenantId, UUID locationId, UUID productId, UUID addonId,
+                             List<RecipeItemInput> recipe) {
+    if (recipe == null) {
+      return;
+    }
+    if (productId != null) {
+      jdbc.update("""
+          delete from recipe_items
+          where product_id = ? and tenant_id = ? and location_id = ?
+          """, productId, tenantId.value(), locationId);
+    } else {
+      jdbc.update("""
+          delete from recipe_items
+          where addon_id = ? and tenant_id = ? and location_id = ?
+          """, addonId, tenantId.value(), locationId);
+    }
+    var seen = new HashSet<UUID>();
+    for (var item : recipe) {
+      if (item.quantity() == null || item.quantity().signum() <= 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "La cantidad del ingrediente debe ser mayor que cero");
+      }
+      if (!seen.add(item.ingredientId())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "El ingrediente esta repetido en la receta");
+      }
+      var exists = jdbc.queryForObject("""
+          select count(*) from ingredients
+          where id = ? and tenant_id = ? and location_id = ?
+          """, Integer.class, item.ingredientId(), tenantId.value(), locationId);
+      if (exists == null || exists == 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ingrediente invalido");
+      }
+      jdbc.update("""
+          insert into recipe_items(id, tenant_id, location_id, product_id, addon_id,
+                                  ingredient_id, quantity)
+          values (?, ?, ?, ?, ?, ?, ?)
+          """, UUID.randomUUID(), tenantId.value(), locationId, productId, addonId,
+          item.ingredientId(), item.quantity());
+    }
+  }
+
   private void bumpVersion(TenantId tenantId, UUID locationId) {
     jdbc.update("""
         update locations set catalog_version = catalog_version + 1
@@ -307,5 +465,8 @@ public class CatalogService {
   }
 
   public record ModifierInput(String name, long additionalPricePesos) {
+  }
+
+  public record RecipeItemInput(UUID ingredientId, BigDecimal quantity) {
   }
 }
