@@ -225,6 +225,9 @@ public class CatalogService {
     }
     if (input.components() != null) {
       replaceComponents(tenantId, locationId, id, input.kind(), input.components());
+    } else if ("COMBO".equals(input.kind())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "El combo necesita al menos un componente");
     }
     if (input.recipe() != null) {
       if ("COMBO".equals(input.kind()) && !input.recipe().isEmpty()) {

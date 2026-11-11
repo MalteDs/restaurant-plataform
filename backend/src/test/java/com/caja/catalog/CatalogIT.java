@@ -107,6 +107,13 @@ class CatalogIT {
             .header("Authorization", "Bearer " + adminToken("admin_combo_malo"))
             .content(json.writeValueAsString(emptyCombo)))
         .andExpect(status().isBadRequest());
+
+    var missingComponents = Map.of(
+        "name", "COMBO SIN COMPONENTES", "pricePesos", 1000, "kind", "COMBO");
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_combo_sin"))
+            .content(json.writeValueAsString(missingComponents)))
+        .andExpect(status().isBadRequest());
   }
 
   @Test void rejectsNegativePriceAndBlankName() throws Exception {

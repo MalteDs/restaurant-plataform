@@ -61,7 +61,7 @@ export interface ProductRow {
   costPesos: number | null
   sortOrder: number
   active: boolean
-  modifierGroupIds: string[]
+  modifierGroupIds?: string[]
   components: ComponentRow[]
   saleDays?: number[]
   addonIds?: string[]
