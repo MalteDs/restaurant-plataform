@@ -124,6 +124,7 @@
 ### Notas de la iteración
 
 - Cualquier usuario autenticado opera Caja. Reportes y el formulario de gastos por fuera siguen siendo Encargado/Admin. Es una decisión explícita para los días en que el encargado de la sede no está. La restricción se aplica también en la ruta y en el endpoint del resumen.
+- La pantalla usa una sola acción **Registrar movimiento** con selector **Ingreso/Retiro** y casilla **Es gasto**; el resumen del turno muestra ingresos, retiros y gastos por separado.
 - Un gasto de caja es un retiro con categoría obligatoria. Crea el movimiento y el gasto en la misma operación de sincronización; el arqueo lee movimientos y la utilidad lee gastos, sin sumar dos veces.
 - Un movimiento se edita o anula solo con el turno abierto. La corrección no borra el histórico: anula el viejo con usuario y fecha y crea el nuevo. Un turno cerrado no se edita.
 - El cierre cuenta por denominaciones; el total se calcula. Si hay diferencia, la nota es obligatoria. El servidor no rechaza el cierre porque su esperado difiera del local: guarda ambos y marca la diferencia.

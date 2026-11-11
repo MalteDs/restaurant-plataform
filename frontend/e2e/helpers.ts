@@ -31,7 +31,7 @@ export async function openShift(page: Page, amount: number) {
   await page.getByRole('link', { name: /^caja$/i }).click()
   await page.getByLabel(/fondo inicial/i).fill(String(amount))
   await page.getByRole('button', { name: /abrir turno/i }).click()
-  await expect(page.getByText(/turno abierto/i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('expected')).toBeVisible({ timeout: 10_000 })
 }
 
 export async function confirmAddIfPresent(page: Page) {

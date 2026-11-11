@@ -14,6 +14,7 @@ interface Props {
 export default function ShiftClosePanel({ database, expectedPesos, onClosed }: Props) {
   const [counts, setCounts] = useState<Record<string, string>>({})
   const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const breakdown = Object.fromEntries(
@@ -27,6 +28,7 @@ export default function ShiftClosePanel({ database, expectedPesos, onClosed }: P
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setError('')
+    setSaving(true)
     try {
       await closeShift(database, {
         countedCashPesos: counted,
@@ -36,21 +38,26 @@ export default function ShiftClosePanel({ database, expectedPesos, onClosed }: P
       await onClosed()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo cerrar el turno')
+      setSaving(false)
     }
   }
 
   return (
-    <Card className="mt-4 bg-gray-50">
+    <Card className="bg-gray-50">
       <form className="space-y-3" onSubmit={onSubmit}>
         <h3 className="text-sm font-semibold text-gray-900">Contar efectivo</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="space-y-1.5">
           {DENOMINATIONS.map((denomination) => {
             const key = String(denomination)
+            const label = `Cantidad de ${denomination.toLocaleString('es-CO')}`
             return (
-              <label key={key} className="block text-sm font-medium text-gray-700">
-                Cantidad de {denomination.toLocaleString('es-CO')}
-                <Input className="mt-1" type="number" min={0} value={counts[key] ?? ''}
-                  onChange={(event) => setCounts({ ...counts, [key]: event.target.value })} />
+              <label key={key} className="flex items-center justify-between gap-3 text-sm text-gray-700">
+                <span aria-hidden="true">${denomination.toLocaleString('es-CO')}</span>
+                <div className="w-24">
+                  <Input className="text-right" type="number" inputMode="numeric" min={0}
+                    aria-label={label} value={counts[key] ?? ''}
+                    onChange={(event) => setCounts({ ...counts, [key]: event.target.value })} />
+                </div>
               </label>
             )
           })}
@@ -72,8 +79,10 @@ export default function ShiftClosePanel({ database, expectedPesos, onClosed }: P
           <Input className="mt-1" value={note}
             onChange={(event) => setNote(event.target.value)} />
         </label>
-        <Button type="submit">Cerrar turno</Button>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        <Button type="submit" disabled={saving} aria-busy={saving}>
+          {saving ? 'Cerrando…' : 'Cerrar turno'}
+        </Button>
+        {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
       </form>
     </Card>
   )

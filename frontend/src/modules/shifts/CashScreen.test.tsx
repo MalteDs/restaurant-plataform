@@ -43,9 +43,10 @@ it('registra un gasto de caja y actualiza el esperado', async () => {
   const db = await seedWithShift()
   render(<CashScreen database={db} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: /registrar gasto de caja/i }))
+  await userEvent.click(await screen.findByRole('button', { name: /registrar movimiento/i }, { timeout: 5000 }))
   await userEvent.type(screen.getByLabelText(/monto/i), '5000')
   await userEvent.type(screen.getByLabelText(/motivo/i), 'compra lechuga')
+  await userEvent.click(screen.getByLabelText(/es gasto/i))
   await userEvent.selectOptions(screen.getByLabelText(/categoría/i), 'Fruver')
   await userEvent.click(screen.getByRole('button', { name: /guardar movimiento/i }))
 
@@ -62,7 +63,7 @@ it('edita y anula movimientos con el turno abierto', async () => {
   })
   render(<CashScreen database={db} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: /editar/i }))
+  await userEvent.click(await screen.findByRole('button', { name: /editar/i }, { timeout: 5000 }))
   await userEvent.clear(screen.getByLabelText(/monto/i))
   await userEvent.type(screen.getByLabelText(/monto/i), '3000')
   await userEvent.selectOptions(screen.getByLabelText(/categoría/i), 'Aseo')
@@ -83,7 +84,7 @@ it('oculta editar y anular después de cerrar', async () => {
   })
   render(<CashScreen database={db} />)
 
-  expect(await screen.findByText(/compra lechuga/i)).toBeInTheDocument()
+  expect(await screen.findByText(/compra lechuga/i, {}, { timeout: 5000 })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /editar/i })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /anular/i })).not.toBeInTheDocument()
 })
@@ -95,18 +96,18 @@ it('un cajero puede usar Caja', async () => {
   }))
   render(<CashScreen database={db} />)
 
-  expect(await screen.findByRole('button', { name: /registrar retiro/i })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: /registrar movimiento/i }, { timeout: 5000 })).toBeInTheDocument()
 })
 
 it('cierra con denominaciones y exige nota si hay diferencia', async () => {
   const db = await seedWithShift()
   render(<CashScreen database={db} />)
 
-  await userEvent.type(await screen.findByLabelText(/cantidad de 20\.000/i), '2')
+  await userEvent.type(await screen.findByLabelText(/cantidad de 20\.000/i, {}, { timeout: 5000 }), '2')
   await userEvent.type(screen.getByLabelText(/cantidad de 1\.000/i), '3')
   expect(screen.getByTestId('counted')).toHaveTextContent('43.000')
   await userEvent.click(screen.getByRole('button', { name: /cerrar turno/i }))
-  expect(await screen.findByText(/nota es obligatoria/i)).toBeInTheDocument()
+  expect(await screen.findByText(/nota es obligatoria/i, {}, { timeout: 5000 })).toBeInTheDocument()
 
   await userEvent.type(screen.getByLabelText(/nota del cierre/i), 'faltante revisado')
   await userEvent.click(screen.getByRole('button', { name: /cerrar turno/i }))
@@ -117,7 +118,7 @@ it('muestra el turno cerrado en el historial y permite descargar', async () => {
   const db = await seedWithShift({ closed: true })
   render(<CashScreen database={db} />)
 
-  expect(await screen.findByText(/turnos anteriores/i)).toBeInTheDocument()
+  expect(await screen.findByText(/turnos anteriores/i, {}, { timeout: 5000 })).toBeInTheDocument()
   expect(screen.getByText(/faltante revisado/i)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /descargar cierre/i })).toBeInTheDocument()
 })

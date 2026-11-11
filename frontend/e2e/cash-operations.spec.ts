@@ -17,9 +17,10 @@ test('registra, corrige y cierra un gasto de caja con denominaciones', async ({ 
   await openShift(page, 50000)
 
   await page.getByRole('link', { name: /^caja$/i }).click()
-  await page.getByRole('button', { name: /registrar gasto de caja/i }).click()
+  await page.getByRole('button', { name: /registrar movimiento/i }).click()
   await page.getByLabel(/^monto$/i).fill('5000')
   await page.getByLabel(/^motivo$/i).fill('compra lechuga')
+  await page.getByLabel(/es gasto/i).check()
   await page.getByRole('combobox', { name: /categoría/i }).selectOption('Fruver')
   await page.getByRole('button', { name: /guardar movimiento/i }).click()
   await expect(page.getByTestId('expected')).toContainText('45.000')

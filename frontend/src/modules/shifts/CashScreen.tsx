@@ -17,8 +17,6 @@ import ShiftHistory from './ShiftHistory'
 
 interface PanelState {
   movement?: CashMovementRow
-  type: 'DEPOSIT' | 'WITHDRAWAL'
-  expense: boolean
 }
 
 export default function CashScreen({ database = db }: { database?: CajaDb }) {
@@ -33,6 +31,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
   const [panel, setPanel] = useState<PanelState | null>(null)
   const [showVoided, setShowVoided] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   async function refresh() {
     const shifts = await database.shifts.toArray()
@@ -65,6 +64,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
 
   async function onOpen() {
     setError('')
+    setNotice('')
     try {
       await openShift(database, Number(opening) || 0)
       await refresh()
@@ -74,12 +74,14 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
   }
 
   async function onSave(input: CashMovementInput) {
-    if (panel?.movement) {
-      await editCashMovement(database, panel.movement.id, input)
+    const editing = panel?.movement
+    if (editing) {
+      await editCashMovement(database, editing.id, input)
     } else {
       await registerCashMovement(database, input)
     }
     setPanel(null)
+    setNotice(editing ? 'Movimiento actualizado' : 'Movimiento guardado')
     await refresh()
   }
 
@@ -90,123 +92,179 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
     setError('')
     try {
       await voidCashMovement(database, movement.id)
+      setNotice('Movimiento anulado')
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo anular el movimiento')
     }
   }
 
+  async function onClosed() {
+    setNotice('Turno cerrado')
+    await refresh()
+  }
+
   const active = movements.filter((movement) => !movement.voidedAt)
   const voided = movements.filter((movement) => movement.voidedAt)
+  const deposits = active.filter((movement) => movement.type === 'DEPOSIT')
+    .reduce((sum, movement) => sum + movement.amountPesos, 0)
+  const withdrawals = active.filter((movement) => movement.type === 'WITHDRAWAL')
+    .reduce((sum, movement) => sum + movement.amountPesos, 0)
+  const expenses = active.filter((movement) => movement.expenseCategoryName)
+    .reduce((sum, movement) => sum + movement.amountPesos, 0)
 
-  function movementRow(movement: CashMovementRow) {
-    const category = movement.expenseCategoryName ? ` · ${movement.expenseCategoryName}` : ''
+  function movementRow(movement: CashMovementRow, canEdit: boolean) {
+    const isExpense = Boolean(movement.expenseCategoryName)
+    const badge = movement.type === 'DEPOSIT'
+      ? { label: 'Ingreso', className: 'bg-emerald-50 text-emerald-700' }
+      : isExpense
+        ? { label: 'Gasto', className: 'bg-red-50 text-red-700' }
+        : { label: 'Retiro', className: 'bg-amber-50 text-amber-700' }
     const user = movement.userId ? userNames.get(movement.userId) ?? movement.userId : ''
+    const meta = [movement.expenseCategoryName, user].filter(Boolean).join(' · ')
+
     return (
       <li key={movement.id}
-        className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 py-2 text-sm">
-        <div>
-          <p>
-            <span className="font-medium">{movement.type === 'DEPOSIT' ? 'Ingreso' : 'Retiro'}</span>
-            {' '}${movement.amountPesos.toLocaleString('es-CO')}
-          </p>
-          <p className="text-gray-500">
-            {movement.reason}{category}{user ? ` · ${user}` : ''}
-          </p>
+        className="flex flex-wrap items-center gap-3 border-t border-gray-100 py-3 text-sm">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
+          {badge.label}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-gray-900">{movement.reason}</p>
+          {meta ? <p className="truncate text-xs text-gray-500">{meta}</p> : null}
         </div>
-        {open ? (
-          <div className="flex gap-2">
-            <Button variant="ghost"
-              onClick={() => setPanel({
-                movement,
-                type: movement.type,
-                expense: Boolean(movement.expenseCategoryName)
-              })}>
+        <span className="font-semibold text-gray-900">
+          ${movement.amountPesos.toLocaleString('es-CO')}
+        </span>
+        {canEdit && open ? (
+          <div className="flex gap-1">
+            <Button variant="ghost" className="px-2 py-1 text-xs"
+              onClick={() => {
+                setNotice('')
+                setPanel({ movement })
+              }}>
               Editar
             </Button>
-            <Button variant="danger" onClick={() => void onVoid(movement)}>Anular</Button>
+            <Button variant="ghost" className="px-2 py-1 text-xs !text-red-600"
+              onClick={() => void onVoid(movement)}>
+              Anular
+            </Button>
           </div>
         ) : null}
       </li>
     )
   }
 
+  const openForm = (
+    <Card>
+      <h2 className="text-sm font-semibold text-gray-900">Abrir turno</h2>
+      <p className="mt-1 text-sm text-gray-500">Registra el fondo inicial en efectivo.</p>
+      <label className="mt-3 block text-sm font-medium text-gray-700">
+        Fondo inicial
+        <Input className="mt-1" type="number" inputMode="numeric" min={0} value={opening}
+          onChange={(event) => setOpening(event.target.value)} />
+      </label>
+      <Button className="mt-3" onClick={onOpen}>Abrir turno</Button>
+    </Card>
+  )
+
   return (
     <div className="space-y-4">
       <PageHeader title="Caja" subtitle="Turno, movimientos y cierre" />
+      {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
+      {notice ? <p role="status" className="text-sm text-emerald-700">{notice}</p> : null}
+
       {current ? (
-        <Card>
-          <p className="text-sm text-gray-500">
-            {open ? 'Turno abierto' : 'Turno cerrado'} · efectivo esperado{' '}
-            <span data-testid="expected" className="font-semibold text-gray-900">
-              ${expected.toLocaleString('es-CO')}
-            </span>
-          </p>
-          {open ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={() => setPanel({ type: 'DEPOSIT', expense: false })}>
-                Registrar ingreso
-              </Button>
-              <Button onClick={() => setPanel({ type: 'WITHDRAWAL', expense: false })}>
-                Registrar retiro
-              </Button>
-              <Button onClick={() => setPanel({ type: 'WITHDRAWAL', expense: true })}>
-                Registrar gasto de caja
-              </Button>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-gray-500">
+                  {open ? 'Turno abierto' : 'Turno cerrado'}
+                </p>
+                <p className="mt-1 text-3xl font-bold text-gray-900">
+                  <span data-testid="expected">${expected.toLocaleString('es-CO')}</span>
+                </p>
+                <p className="text-xs text-gray-500">Efectivo esperado</p>
+              </div>
+              {open ? (
+                <Button onClick={() => {
+                  setNotice('')
+                  setPanel({})
+                }}>
+                  Registrar movimiento
+                </Button>
+              ) : null}
             </div>
-          ) : null}
-          {open && panel ? (
-            <CashMovementPanel
-              movement={panel.movement}
-              categories={categories}
-              initialType={panel.type}
-              initialExpense={panel.expense}
-              onSave={onSave}
-              onCancel={() => setPanel(null)}
-            />
-          ) : null}
-          <h3 className="mt-5 text-sm font-semibold text-gray-900">Movimientos del turno</h3>
-          {active.length === 0 ? (
-            <p className="mt-2 text-sm text-gray-500">Sin movimientos.</p>
-          ) : (
-            <ul className="mt-2">{active.map(movementRow)}</ul>
-          )}
-          {voided.length > 0 ? (
-            <>
-              <Button className="mt-2" variant="ghost" onClick={() => setShowVoided(!showVoided)}>
-                Ver anulados
-              </Button>
-              {showVoided ? <ul className="mt-2">{voided.map(movementRow)}</ul> : null}
-            </>
-          ) : null}
-          {open ? (
-            <ShiftClosePanel database={database} expectedPesos={expected} onClosed={refresh} />
-          ) : (
-            <div className="mt-5 border-t border-gray-200 pt-3 text-sm">
-              <p>
-                Contado: ${(current.countedCashPesos ?? 0).toLocaleString('es-CO')}
-                {' · '}Diferencia:{' '}
-                <span data-testid="difference" className="font-semibold text-gray-900">
-                  ${(current.differencePesos ?? 0).toLocaleString('es-CO')}
-                </span>
-              </p>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-3 text-center text-sm">
+              <div>
+                <p className="text-gray-500">Ingresos</p>
+                <p className="font-semibold text-gray-900">${deposits.toLocaleString('es-CO')}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Retiros</p>
+                <p className="font-semibold text-gray-900">${withdrawals.toLocaleString('es-CO')}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Gastos</p>
+                <p className="font-semibold text-gray-900">${expenses.toLocaleString('es-CO')}</p>
+              </div>
             </div>
-          )}
-        </Card>
-      ) : null}
+
+            {open && panel ? (
+              <CashMovementPanel
+                movement={panel.movement}
+                categories={categories}
+                onSave={onSave}
+                onCancel={() => setPanel(null)}
+              />
+            ) : null}
+
+            <div className="mt-5 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-gray-900">Movimientos del turno</h3>
+              {voided.length > 0 ? (
+                <Button variant="ghost" className="px-2 py-1 text-xs"
+                  onClick={() => setShowVoided(!showVoided)}>
+                  {showVoided ? 'Ocultar anulados' : `Ver anulados (${voided.length})`}
+                </Button>
+              ) : null}
+            </div>
+            {active.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-500">Sin movimientos.</p>
+            ) : (
+              <ul className="mt-2">{active.map((movement) => movementRow(movement, true))}</ul>
+            )}
+            {showVoided && voided.length > 0 ? (
+              <ul className="mt-2">{voided.map((movement) => movementRow(movement, false))}</ul>
+            ) : null}
+
+            {!open ? (
+              <div className="mt-4 border-t border-gray-200 pt-3 text-sm">
+                <p>
+                  Contado: ${(current.countedCashPesos ?? 0).toLocaleString('es-CO')}
+                  {' · '}Diferencia:{' '}
+                  <span data-testid="difference" className="font-semibold text-gray-900">
+                    ${(current.differencePesos ?? 0).toLocaleString('es-CO')}
+                  </span>
+                </p>
+              </div>
+            ) : null}
+          </Card>
+
+          <div>
+            {open ? (
+              <ShiftClosePanel database={database} expectedPesos={expected} onClosed={onClosed} />
+            ) : (
+              openForm
+            )}
+          </div>
+        </div>
+      ) : (
+        openForm
+      )}
+
       {current ? <ShiftHistory database={database} shifts={history} /> : null}
-      {!open ? (
-        <Card>
-          <p className="text-sm text-gray-500">No hay turno abierto.</p>
-          <label className="mt-3 block text-sm font-medium text-gray-700">
-            Fondo inicial
-            <Input className="mt-1" type="number" min={0} value={opening}
-              onChange={(event) => setOpening(event.target.value)} />
-          </label>
-          <Button className="mt-3" onClick={onOpen}>Abrir turno</Button>
-        </Card>
-      ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>
   )
 }
