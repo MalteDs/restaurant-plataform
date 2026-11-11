@@ -25,7 +25,7 @@ La caja funciona, pero el contraste del naranja, el foco de teclado y los diálo
 
 ## Verificación
 
-- `npm test` → 31 archivos, 121 pruebas, 0 fallos.
+- `npm test` → 31 archivos, 123 pruebas, 0 fallos.
 - `npm run build` correcto.
 - Contraste calculado: `#c2410c` 5.18:1 y `#9a3412` 7.31:1 sobre blanco.
 - Pruebas nuevas: `Modal` (foco/Escape/Tab), `FormError` (role alert), salida de Bloqueo y semántica de tabla en Pedidos.

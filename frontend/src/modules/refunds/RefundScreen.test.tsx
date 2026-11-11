@@ -73,7 +73,7 @@ it('muestra las ventas registradas', async () => {
 
   renderScreen(db)
 
-  expect(await screen.findByText('ALM-A-000001', undefined, { timeout: 5000 })).toBeInTheDocument()
+  expect(await screen.findByText('ALM-A-000001')).toBeInTheDocument()
 })
 
 it('reimprime una venta desde Pedidos', async () => {
@@ -90,9 +90,7 @@ it('reimprime una venta desde Pedidos', async () => {
 
   await userEvent.click(await screen.findByRole(
     'button',
-    { name: /ver alm-a-000001/i },
-    { timeout: 5000 }
-  ))
+    { name: /ver alm-a-000001/i }))
   await userEvent.click(await screen.findByRole('button', { name: /imprimir comprobante/i }))
   expect(print).toHaveBeenCalledWith('s1')
 })
@@ -133,7 +131,7 @@ it('devuelve desde el detalle y muestra el motivo', async () => {
   await userEvent.type(screen.getByLabelText(/motivo/i), 'cobro equivocado')
   await userEvent.click(screen.getByRole('button', { name: /confirmar devolución/i }))
 
-  expect(await screen.findByText(/cobro equivocado/, undefined, { timeout: 5000 }))
+  expect(await screen.findByText(/cobro equivocado/))
     .toBeInTheDocument()
   expect((await screen.findAllByText(/Devuelta/)).length).toBeGreaterThan(0)
   expect((await db.sales.get('s1'))?.status).toBe('REFUNDED')

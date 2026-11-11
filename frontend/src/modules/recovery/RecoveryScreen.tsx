@@ -100,7 +100,7 @@ export default function RecoveryScreen() {
           />
         </div>
         {message ? <p className="text-sm text-green-700">{message}</p> : null}
-        <FormError>{error}</FormError>
+        <FormError className="mt-3">{error}</FormError>
       </Card>
     </div>
   )

@@ -117,7 +117,7 @@ export default function SettingsScreen() {
           </label>
           <Button type="submit">Guardar</Button>
           {message ? <p className="text-sm text-green-700">{message}</p> : null}
-          <FormError>{error}</FormError>
+          <FormError className="mt-3">{error}</FormError>
         </form>
       </Card>
       <Card className="mt-4 max-w-md">
@@ -145,7 +145,7 @@ export default function SettingsScreen() {
           ))}
         </ul>
         {categoryMessage ? <p className="mt-3 text-sm text-green-700">{categoryMessage}</p> : null}
-        <FormError>{categoryError}</FormError>
+        <FormError className="mt-3">{categoryError}</FormError>
       </Card>
     </div>
   )

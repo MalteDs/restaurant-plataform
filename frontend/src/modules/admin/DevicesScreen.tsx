@@ -107,7 +107,7 @@ export default function DevicesScreen() {
               Token (guárdalo, no se vuelve a mostrar): {token}
             </p>
           ) : null}
-          <FormError>{error}</FormError>
+          <FormError className="mt-3">{error}</FormError>
         </Card>
       </div>
     </div>

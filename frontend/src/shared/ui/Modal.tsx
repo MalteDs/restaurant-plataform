@@ -43,6 +43,11 @@ export function Modal({ title, onClose, children }: ModalProps) {
       if (items.length === 0) {
         return
       }
+      if (!panel.contains(document.activeElement)) {
+        event.preventDefault()
+        items[0].focus()
+        return
+      }
       const firstItem = items[0]
       const lastItem = items[items.length - 1]
       if (event.shiftKey && document.activeElement === firstItem) {
@@ -61,7 +66,8 @@ export function Modal({ title, onClose, children }: ModalProps) {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
-      previous?.focus()
+      // shortcut: restoration no-ops if the trigger unmounted; add a fallback when modals open from transient rows.
+      window.setTimeout(() => previous?.focus(), 0)
     }
   }, [])
 

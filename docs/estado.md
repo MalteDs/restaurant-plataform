@@ -144,7 +144,7 @@
 
 ### Verificación
 
-- Frontend: `npm test` → 31 archivos, 121 pruebas, 0 fallos; `npm run build` correcto.
+- Frontend: `npm test` → 31 archivos, 123 pruebas, 0 fallos; `npm run build` correcto.
 - Contraste: `brand-600` `#c2410c` = 5.18:1 y `brand-700` `#9a3412` = 7.31:1 sobre blanco.
 - Pruebas nuevas: `Modal` (foco, Escape, Tab), `FormError` (alert), recuperación en Bloqueo y semántica de tabla en Pedidos.
 

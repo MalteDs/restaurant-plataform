@@ -33,12 +33,16 @@ export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInpu
 
 export { Modal } from './Modal'
 
-export function FormError({ children, id }: { children?: ReactNode; id?: string }) {
+export function FormError({ children, id, className = '' }: {
+  children?: ReactNode
+  id?: string
+  className?: string
+}) {
   if (!children) {
     return null
   }
   return (
-    <p id={id} role="alert" className="text-sm text-red-600">
+    <p id={id} role="alert" className={`text-sm text-red-600 ${className}`}>
       {children}
     </p>
   )

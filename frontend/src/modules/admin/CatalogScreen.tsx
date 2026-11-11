@@ -102,7 +102,7 @@ export default function CatalogScreen() {
         <p className="mt-3 text-xs text-gray-500">
           Días: 1=lunes … 7=domingo, separados por coma; vacío=todos.
         </p>
-        <FormError>{error}</FormError>
+        <FormError className="mt-3">{error}</FormError>
       </Card>
     </div>
   )
