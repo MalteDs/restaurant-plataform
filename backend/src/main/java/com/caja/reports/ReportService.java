@@ -4,7 +4,10 @@ import com.caja.reports.Summary.CategoryRow;
 import com.caja.reports.Summary.DayRow;
 import com.caja.reports.Summary.ExpenseCategoryRow;
 import com.caja.reports.Summary.HourRow;
+import com.caja.reports.Summary.IngredientRow;
 import com.caja.reports.Summary.ProductRow;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -111,9 +114,109 @@ public class ReportService {
         """, (rs, rowNum) -> new ExpenseCategoryRow(rs.getString("category"),
         rs.getLong("total")), tenantId, locationId, from, to);
 
+    var byIngredient = jdbc.query("""
+        with usages as (
+          select ri.ingredient_id, si.quantity * ri.quantity as qty
+          from sale_items si
+          join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                       and s.location_id = si.location_id
+          join recipe_items ri on ri.product_id = si.product_id
+                              and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+          where s.tenant_id = ? and s.location_id = ?
+            and s.operational_date between ? and ? and s.status <> 'REFUNDED'
+            and not exists (
+              select 1 from sale_item_components c
+              where c.sale_item_id = si.id and c.tenant_id = si.tenant_id
+                and c.location_id = si.location_id
+            )
+          union all
+          select ri.ingredient_id, si.quantity * c.quantity * ri.quantity
+          from sale_items si
+          join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                       and s.location_id = si.location_id
+          join sale_item_components c on c.sale_item_id = si.id
+          join recipe_items ri on ri.product_id = c.component_product_id
+                              and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+          where s.tenant_id = ? and s.location_id = ?
+            and s.operational_date between ? and ? and s.status <> 'REFUNDED'
+          union all
+          select ri.ingredient_id, si.quantity * a.quantity * ri.quantity
+          from sale_items si
+          join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                       and s.location_id = si.location_id
+          join sale_item_addons a on a.sale_item_id = si.id
+          join recipe_items ri on ri.addon_id = a.addon_id
+                              and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+          where s.tenant_id = ? and s.location_id = ?
+            and s.operational_date between ? and ? and s.status <> 'REFUNDED'
+        )
+        select i.name, i.unit,
+               sum(u.qty) * (1 + i.waste_percent / 100) as quantity,
+               i.waste_percent
+        from usages u
+        join ingredients i on i.id = u.ingredient_id
+                          and i.tenant_id = ? and i.location_id = ?
+        group by i.id, i.name, i.unit, i.waste_percent
+        order by i.name
+        """, (rs, rowNum) -> new IngredientRow(rs.getString("name"), rs.getString("unit"),
+        rs.getBigDecimal("quantity"), rs.getBigDecimal("waste_percent")),
+        tenantId, locationId, from, to, tenantId, locationId, from, to, tenantId, locationId,
+        from, to, tenantId, locationId);
+
+    var productUnits = jdbc.queryForMap("""
+        select coalesce(sum(si.quantity), 0) as total,
+               coalesce(sum(case
+                 when exists (
+                   select 1 from sale_item_components c
+                   where c.sale_item_id = si.id and c.tenant_id = si.tenant_id
+                     and c.location_id = si.location_id
+                 ) then case when not exists (
+                   select 1 from sale_item_components c
+                   where c.sale_item_id = si.id and c.tenant_id = si.tenant_id
+                     and c.location_id = si.location_id
+                     and not exists (
+                       select 1 from recipe_items ri
+                       where ri.product_id = c.component_product_id
+                         and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+                     )
+                 ) then si.quantity else 0 end
+                 else case when exists (
+                   select 1 from recipe_items ri
+                   where ri.product_id = si.product_id
+                     and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+                 ) then si.quantity else 0 end
+               end), 0) as covered
+        from sale_items si
+        join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                     and s.location_id = si.location_id
+        where s.tenant_id = ? and s.location_id = ?
+          and s.operational_date between ? and ? and s.status <> 'REFUNDED'
+        """, tenantId, locationId, from, to);
+    var addonUnits = jdbc.queryForMap("""
+        select coalesce(sum(a.quantity * si.quantity), 0) as total,
+               coalesce(sum(case when exists (
+                 select 1 from recipe_items ri
+                 where ri.addon_id = a.addon_id
+                   and ri.tenant_id = si.tenant_id and ri.location_id = si.location_id
+               ) then a.quantity * si.quantity else 0 end), 0) as covered
+        from sale_items si
+        join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id
+                     and s.location_id = si.location_id
+        join sale_item_addons a on a.sale_item_id = si.id
+        where s.tenant_id = ? and s.location_id = ?
+          and s.operational_date between ? and ? and s.status <> 'REFUNDED'
+        """, tenantId, locationId, from, to);
+    var totalUnits = ((Number) productUnits.get("total")).longValue()
+        + ((Number) addonUnits.get("total")).longValue();
+    var coveredUnits = ((Number) productUnits.get("covered")).longValue()
+        + ((Number) addonUnits.get("covered")).longValue();
+    var coverage = totalUnits == 0 ? new BigDecimal("100.0")
+        : BigDecimal.valueOf(coveredUnits).multiply(BigDecimal.valueOf(100))
+            .divide(BigDecimal.valueOf(totalUnits), 1, RoundingMode.HALF_UP);
+
     return new Summary(salesPesos, refundsPesos, netSalesPesos, cashPesos, cardPesos, brebPesos,
         orders, refundCount, averageTicket, costPesos, expensesPesos, profit, byCategory,
-        byDay, byHour, byProduct, byExpenseCategory);
+        byDay, byHour, byProduct, byExpenseCategory, byIngredient, coverage);
   }
 
   private long methodTotal(UUID tenantId, UUID locationId, LocalDate from, LocalDate to,

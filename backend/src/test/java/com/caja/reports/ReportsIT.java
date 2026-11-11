@@ -62,6 +62,32 @@ class ReportsIT {
     assertEquals(2, ((java.util.List<?>) summary.get("byProduct")).size());
   }
 
+  @Test void sumsTheoreticalConsumptionWithoutDoubleCountingCombos() throws Exception {
+    var ctx = fixture();
+    var carne = ingredient(ctx, "CARNE", "UNIT", 0);
+    var tocineta = ingredient(ctx, "TOCINETA", "GRAM", 10);
+    var addonId = addon(ctx, "TOCINETA EXTRA", tocineta, 30);
+    recipe(ctx, ctx.productId(), carne, 1);
+    var comboId = combo(ctx, "COMBO CONSUMO", ctx.productId(), 2);
+
+    saleWithComponent(ctx, comboId, 2, addonId, 2);
+
+    var summary = summary(ctx);
+    var rows = (List<Map<String, Object>>) summary.get("byIngredient");
+    assertEquals(4.0, ((Number) row(rows, "CARNE").get("quantity")).doubleValue());
+    assertEquals(132.0, ((Number) row(rows, "TOCINETA").get("quantity")).doubleValue());
+  }
+
+  @Test void summaryExcludesRefundedSalesFromConsumption() throws Exception {
+    var ctx = fixture();
+    var carne = ingredient(ctx, "CARNE", "UNIT", 0);
+    recipe(ctx, ctx.productId(), carne, 1);
+    saleWithStatus(ctx, ctx.productId(), 3, "REFUNDED");
+
+    var rows = (List<Map<String, Object>>) summary(ctx).get("byIngredient");
+    assertTrue(rows.isEmpty());
+  }
+
   @Test void summaryExcludesOtherTenant() throws Exception {
     var ctx = fixture();
     var other = fixture();
@@ -269,6 +295,91 @@ class ReportsIT {
         insert into orders(id, tenant_id, location_id, sale_id, source, status, operational_date)
         values (?, ?, ?, ?, 'CAJA', 'CHARGED', current_date)
         """, UUID.randomUUID(), ctx.tenantId(), ctx.locationId(), saleId);
+  }
+
+  private UUID ingredient(Ctx ctx, String name, String unit, double wastePercent) {
+    var id = UUID.randomUUID();
+    jdbc.update("insert into ingredients(id, tenant_id, location_id, name, unit, waste_percent) "
+        + "values (?, ?, ?, ?, ?::ingredient_unit, ?)", id, ctx.tenantId(), ctx.locationId(), name,
+        unit, wastePercent);
+    return id;
+  }
+
+  private void recipe(Ctx ctx, UUID productId, UUID ingredientId, double quantity) {
+    jdbc.update("insert into recipe_items(id, tenant_id, location_id, product_id, ingredient_id, "
+        + "quantity) values (?, ?, ?, ?, ?, ?)", UUID.randomUUID(), ctx.tenantId(),
+        ctx.locationId(), productId, ingredientId, quantity);
+  }
+
+  private UUID addon(Ctx ctx, String name, UUID ingredientId, double quantity) {
+    var id = UUID.randomUUID();
+    jdbc.update("insert into addons(id, tenant_id, location_id, name, price_pesos) "
+        + "values (?, ?, ?, ?, 5000)", id, ctx.tenantId(), ctx.locationId(), name);
+    jdbc.update("insert into recipe_items(id, tenant_id, location_id, addon_id, ingredient_id, "
+        + "quantity) values (?, ?, ?, ?, ?, ?)", UUID.randomUUID(), ctx.tenantId(),
+        ctx.locationId(), id, ingredientId, quantity);
+    return id;
+  }
+
+  private UUID combo(Ctx ctx, String name, UUID componentId, int quantity) {
+    var id = UUID.randomUUID();
+    jdbc.update("insert into products(id, tenant_id, location_id, kind, name, price_pesos) "
+        + "values (?, ?, ?, 'COMBO', ?, 25000)", id, ctx.tenantId(), ctx.locationId(), name);
+    jdbc.update("insert into combo_components(combo_product_id, component_product_id, quantity, "
+        + "tenant_id, location_id) values (?, ?, ?, ?, ?)", id, componentId, quantity,
+        ctx.tenantId(), ctx.locationId());
+    return id;
+  }
+
+  private void saleWithComponent(Ctx ctx, UUID productId, int quantity, UUID addonId,
+                                 int addonQuantity) {
+    var saleId = UUID.randomUUID();
+    jdbc.update("""
+        insert into sales(id, tenant_id, location_id, device_id, user_id, shift_id, type,
+                          total_pesos, display_code, device_seq, operational_date, client_created_at)
+        values (?, ?, ?, ?, ?, ?, 'COUNTER', 50000, ?, ?, current_date, now())
+        """, saleId, ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(), ctx.shiftId(),
+        "ALM-X-" + UUID.randomUUID().toString().substring(0, 6),
+        Math.abs(UUID.randomUUID().getMostSignificantBits() % 100000));
+    jdbc.update("insert into payments(id, tenant_id, location_id, sale_id, method, amount_pesos) "
+        + "values (?, ?, ?, ?, 'CASH', 50000)", UUID.randomUUID(), ctx.tenantId(),
+        ctx.locationId(), saleId);
+    var itemId = UUID.randomUUID();
+    jdbc.update("""
+        insert into sale_items(id, tenant_id, location_id, sale_id, product_id, product_name,
+                               category_name, quantity, unit_price_pesos, line_total_pesos)
+        values (?, ?, ?, ?, ?, 'COMBO CONSUMO', 'COMBOS', ?, 25000, 50000)
+        """, itemId, ctx.tenantId(), ctx.locationId(), saleId, productId, quantity);
+    jdbc.update("insert into sale_item_components(sale_item_id, component_product_id, "
+        + "component_name, quantity, tenant_id, location_id) values (?, ?, 'PRODUCTO', 2, ?, ?)",
+        itemId, ctx.productId(), ctx.tenantId(), ctx.locationId());
+    jdbc.update("insert into sale_item_addons(sale_item_id, addon_id, addon_name, "
+        + "additional_price_pesos, quantity, tenant_id, location_id) values (?, ?, 'TOCINETA', "
+        + "5000, ?, ?, ?)", itemId, addonId, addonQuantity, ctx.tenantId(), ctx.locationId());
+  }
+
+  private void saleWithStatus(Ctx ctx, UUID productId, int quantity, String status) {
+    var saleId = UUID.randomUUID();
+    jdbc.update("""
+        insert into sales(id, tenant_id, location_id, device_id, user_id, shift_id, type,
+                          total_pesos, status, display_code, device_seq, operational_date,
+                          client_created_at)
+        values (?, ?, ?, ?, ?, ?, 'COUNTER', 16500, ?::sale_status, ?, ?, current_date, now())
+        """, saleId, ctx.tenantId(), ctx.locationId(), ctx.deviceId(), ctx.userId(), ctx.shiftId(),
+        status, "ALM-R-" + UUID.randomUUID().toString().substring(0, 6),
+        Math.abs(UUID.randomUUID().getMostSignificantBits() % 100000));
+    jdbc.update("insert into payments(id, tenant_id, location_id, sale_id, method, amount_pesos) "
+        + "values (?, ?, ?, ?, 'CASH', 16500)", UUID.randomUUID(), ctx.tenantId(),
+        ctx.locationId(), saleId);
+    jdbc.update("""
+        insert into sale_items(id, tenant_id, location_id, sale_id, product_id, product_name,
+                               category_name, quantity, unit_price_pesos, line_total_pesos)
+        values (?, ?, ?, ?, ?, 'PRODUCTO', 'HAMBURGUESAS', ?, 16500, 16500)
+        """, UUID.randomUUID(), ctx.tenantId(), ctx.locationId(), saleId, productId, quantity);
+  }
+
+  private Map<String, Object> row(List<Map<String, Object>> rows, String name) {
+    return rows.stream().filter(row -> name.equals(row.get("name"))).findFirst().orElseThrow();
   }
 
   private void saleWithCost(Ctx ctx, long totalPesos, int quantity, long unitCost, String status) {
