@@ -25,6 +25,7 @@ export interface SaleInput {
   type: 'COUNTER' | 'DELIVERY' | 'DINE_IN'
   tableLabel?: string | null
   deliveryFeePesos?: number
+  cashReceivedPesos?: number | null
   items: SaleItemInput[]
   payments: SalePaymentInput[]
 }
@@ -114,6 +115,15 @@ export async function createSale(
   if (paid !== totalPesos) {
     throw new Error('Los pagos no suman el total de la venta')
   }
+  const cashReceivedPesos = input.cashReceivedPesos ?? null
+  if (cashReceivedPesos !== null) {
+    if (input.payments.length !== 1 || input.payments[0].method !== 'CASH') {
+      throw new Error('El efectivo recibido solo aplica a un pago en efectivo')
+    }
+    if (!Number.isFinite(cashReceivedPesos) || cashReceivedPesos < totalPesos) {
+      throw new Error('El efectivo recibido no alcanza el total')
+    }
+  }
 
   const created = await database.transaction(
     'rw',
@@ -137,7 +147,8 @@ export async function createSale(
         shiftId: shift.id,
         userId,
         tableLabel: input.tableLabel ?? null,
-        deliveryFeePesos: input.deliveryFeePesos ?? 0
+        deliveryFeePesos: input.deliveryFeePesos ?? 0,
+        cashReceivedPesos
       })
       await database.saleItems.bulkAdd(
         input.items.map((item, index) => {

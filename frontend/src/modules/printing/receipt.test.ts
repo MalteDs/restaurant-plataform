@@ -107,6 +107,25 @@ it('escapa el texto dinámico', () => {
   expect(html).toContain('&lt;script&gt;')
 })
 
+it('muestra el efectivo recibido y el cambio', () => {
+  const html = buildReceiptHtml(data({
+    sale: sale({ cashReceivedPesos: 30000 }),
+    payments: [payment({ amountPesos: 23000 })]
+  }))
+
+  expect(html).toContain('Recibido')
+  expect(html).toContain('$30.000')
+  expect(html).toContain('Cambio')
+  expect(html).toContain('$7.000')
+})
+
+it('no muestra recibido ni cambio si no se registraron', () => {
+  const html = buildReceiptHtml(data())
+
+  expect(html).not.toContain('Recibido')
+  expect(html).not.toContain('Cambio')
+})
+
 it('usa el código del dispositivo cuando no hay sede', () => {
   const html = buildReceiptHtml(data({ locationName: null, deviceCode: 'ALM-A' }))
   expect(html).toContain('ALM-A')

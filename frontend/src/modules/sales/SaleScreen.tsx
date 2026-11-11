@@ -287,6 +287,9 @@ export default function SaleScreen({
     const payments = splitMode
       ? parts.map((part) => ({ method: part.method, amountPesos: part.amountPesos }))
       : [{ method, amountPesos: total }]
+    const cashReceivedPesos = !splitMode && method === 'CASH' && cashReceived.trim() !== ''
+      ? received
+      : null
     setSubmitting(true)
     try {
       const charge = onCreateSale ?? ((input: SaleInput) => createSale(database, input))
@@ -294,6 +297,7 @@ export default function SaleScreen({
         type,
         tableLabel: type === 'DINE_IN' ? tableLabel : null,
         deliveryFeePesos: type === 'DELIVERY' ? deliveryFee : 0,
+        cashReceivedPesos,
         payments,
         items: cart.map((line) => ({
           productId: line.product.id,
