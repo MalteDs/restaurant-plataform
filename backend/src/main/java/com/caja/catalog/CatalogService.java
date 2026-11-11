@@ -3,6 +3,7 @@ package com.caja.catalog;
 import com.caja.catalog.CatalogSnapshot.AddonView;
 import com.caja.catalog.CatalogSnapshot.CategoryView;
 import com.caja.catalog.CatalogSnapshot.ComponentView;
+import com.caja.catalog.CatalogSnapshot.DayPriceView;
 import com.caja.catalog.CatalogSnapshot.IngredientView;
 import com.caja.catalog.CatalogSnapshot.ModifierGroupView;
 import com.caja.catalog.CatalogSnapshot.ModifierView;
@@ -123,6 +124,34 @@ public class CatalogService {
         .add(new ComponentView(rs.getObject("component_product_id", UUID.class),
             rs.getString("name"), rs.getInt("quantity"))), tenantId.value(), locationId);
 
+    var productAddons = new LinkedHashMap<UUID, List<UUID>>();
+    jdbc.query("""
+        select product_id, addon_id from product_addons
+        where tenant_id = ? and location_id = ?
+        """, (RowCallbackHandler) rs -> productAddons
+        .computeIfAbsent(rs.getObject("product_id", UUID.class), key -> new ArrayList<>())
+        .add(rs.getObject("addon_id", UUID.class)), tenantId.value(), locationId);
+
+    var dayPricesByProduct = new LinkedHashMap<UUID, List<DayPriceView>>();
+    jdbc.query("""
+        select product_id, weekday, price_pesos from product_day_prices
+        where tenant_id = ? and location_id = ?
+        order by weekday
+        """, (RowCallbackHandler) rs -> dayPricesByProduct
+        .computeIfAbsent(rs.getObject("product_id", UUID.class), key -> new ArrayList<>())
+        .add(new DayPriceView(rs.getInt("weekday"), rs.getLong("price_pesos"))),
+        tenantId.value(), locationId);
+
+    var productRecipes = new LinkedHashMap<UUID, List<RecipeItemView>>();
+    jdbc.query("""
+        select product_id, ingredient_id, quantity from recipe_items
+        where tenant_id = ? and location_id = ? and product_id is not null
+        order by ingredient_id
+        """, (RowCallbackHandler) rs -> productRecipes
+        .computeIfAbsent(rs.getObject("product_id", UUID.class), key -> new ArrayList<>())
+        .add(new RecipeItemView(rs.getObject("ingredient_id", UUID.class),
+            rs.getBigDecimal("quantity"))), tenantId.value(), locationId);
+
     var addons = jdbc.query("""
         select id, name, price_pesos, active
         from addons
@@ -157,6 +186,9 @@ public class CatalogService {
     for (var product : products) {
       product.modifierGroupIds().addAll(groupsByProduct.getOrDefault(product.id(), List.of()));
       product.components().addAll(componentsByProduct.getOrDefault(product.id(), List.of()));
+      product.addonIds().addAll(productAddons.getOrDefault(product.id(), List.of()));
+      product.dayPrices().addAll(dayPricesByProduct.getOrDefault(product.id(), List.of()));
+      product.recipe().addAll(productRecipes.getOrDefault(product.id(), List.of()));
       productsById.put(product.id(), product);
     }
     for (var group : groups) {
@@ -170,36 +202,54 @@ public class CatalogService {
   }
 
   @Transactional
-  public UUID createProduct(TenantId tenantId, UUID locationId, String name, UUID categoryId,
-                            long pricePesos, Long costPesos, String kind,
-                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
+  public UUID createProduct(TenantId tenantId, UUID locationId, ProductInput input) {
     var id = UUID.randomUUID();
     try {
       jdbc.update("""
           insert into products(id, tenant_id, location_id, category_id, kind, name, price_pesos,
                                cost_pesos, sale_days)
           values (?, ?, ?, ?, ?::product_kind, ?, ?, ?, ?)
-          """, id, tenantId.value(), locationId, categoryId, kind, name, pricePesos, costPesos,
-          formatSaleDays(saleDays));
+          """, id, tenantId.value(), locationId, input.categoryId(), input.kind(), input.name(),
+          input.pricePesos(), input.costPesos(), formatSaleDays(input.saleDays()));
     } catch (DataIntegrityViolationException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "El producto ya existe o es invalido");
     }
-    bumpVersion(tenantId, locationId);
-    if (modifierGroupIds != null && !modifierGroupIds.isEmpty()) {
-      replaceModifierGroups(tenantId, locationId, id, modifierGroupIds);
+    if (input.modifierGroupIds() != null && !input.modifierGroupIds().isEmpty()) {
+      replaceModifierGroups(tenantId, locationId, id, input.modifierGroupIds());
     }
+    if (input.addonIds() != null) {
+      replaceAddons(tenantId, locationId, id, input.addonIds());
+    }
+    if (input.dayPrices() != null) {
+      replaceDayPrices(tenantId, locationId, id, input.dayPrices());
+    }
+    if (input.components() != null) {
+      replaceComponents(tenantId, locationId, id, input.kind(), input.components());
+    }
+    if (input.recipe() != null) {
+      if ("COMBO".equals(input.kind()) && !input.recipe().isEmpty()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Un combo no lleva receta propia");
+      }
+      replaceRecipe(tenantId, locationId, id, null, input.recipe());
+    }
+    bumpVersion(tenantId, locationId);
     audit.record(tenantId.value(), locationId, null, "CATALOG_PRODUCT_CREATED", "product", id,
-        Map.of("name", name, "pricePesos", pricePesos));
+        Map.of("name", input.name(), "pricePesos", input.pricePesos()));
     return id;
   }
 
   @Transactional
-  public void updateProduct(TenantId tenantId, UUID locationId, UUID productId, String name,
-                            UUID categoryId, Long pricePesos, Long costPesos, Boolean active,
-                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
-    if (name != null && name.isBlank()) {
+  public void updateProduct(TenantId tenantId, UUID locationId, UUID productId,
+                            ProductUpdateInput input) {
+    if (input.name() != null && input.name().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
     }
+    var kind = jdbc.query("""
+        select kind from products where id = ? and tenant_id = ? and location_id = ?
+        """, (rs, rowNum) -> rs.getString("kind"), productId, tenantId.value(), locationId)
+        .stream().findFirst().orElseThrow(() -> new ResponseStatusException(
+            HttpStatus.NOT_FOUND, "Producto no encontrado"));
     var updated = jdbc.update("""
         update products
         set name = coalesce(?, name), category_id = coalesce(?, category_id),
@@ -208,15 +258,112 @@ public class CatalogService {
             sale_days = case when ? then ? else sale_days end,
             updated_at = now()
         where id = ? and tenant_id = ? and location_id = ?
-        """, name, categoryId, pricePesos, costPesos, active, saleDays != null,
-        formatSaleDays(saleDays), productId, tenantId.value(), locationId);
+        """, input.name(), input.categoryId(), input.pricePesos(), input.costPesos(),
+        input.active(), input.saleDays() != null, formatSaleDays(input.saleDays()), productId,
+        tenantId.value(), locationId);
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
-    if (modifierGroupIds != null) {
-      replaceModifierGroups(tenantId, locationId, productId, modifierGroupIds);
+    if (input.modifierGroupIds() != null) {
+      replaceModifierGroups(tenantId, locationId, productId, input.modifierGroupIds());
+    }
+    if (input.addonIds() != null) {
+      replaceAddons(tenantId, locationId, productId, input.addonIds());
+    }
+    if (input.dayPrices() != null) {
+      replaceDayPrices(tenantId, locationId, productId, input.dayPrices());
+    }
+    if (input.components() != null) {
+      replaceComponents(tenantId, locationId, productId, kind, input.components());
+    }
+    if (input.recipe() != null) {
+      if ("COMBO".equals(kind) && !input.recipe().isEmpty()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Un combo no lleva receta propia");
+      }
+      replaceRecipe(tenantId, locationId, productId, null, input.recipe());
     }
     bumpVersion(tenantId, locationId);
+  }
+
+  private void replaceAddons(TenantId tenantId, UUID locationId, UUID productId,
+                             List<UUID> addonIds) {
+    jdbc.update("""
+        delete from product_addons
+        where product_id = ? and tenant_id = ? and location_id = ?
+        """, productId, tenantId.value(), locationId);
+    for (var addonId : addonIds) {
+      var exists = jdbc.queryForObject("""
+          select count(*) from addons
+          where id = ? and tenant_id = ? and location_id = ?
+          """, Integer.class, addonId, tenantId.value(), locationId);
+      if (exists == null || exists == 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Adicional invalido");
+      }
+      jdbc.update("""
+          insert into product_addons(product_id, addon_id, tenant_id, location_id)
+          values (?, ?, ?, ?)
+          """, productId, addonId, tenantId.value(), locationId);
+    }
+  }
+
+  private void replaceDayPrices(TenantId tenantId, UUID locationId, UUID productId,
+                                List<DayPriceInput> dayPrices) {
+    jdbc.update("""
+        delete from product_day_prices
+        where product_id = ? and tenant_id = ? and location_id = ?
+        """, productId, tenantId.value(), locationId);
+    var seen = new HashSet<Integer>();
+    for (var dayPrice : dayPrices) {
+      if (dayPrice.weekday() < 1 || dayPrice.weekday() > 7 || !seen.add(dayPrice.weekday())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dia de precio invalido");
+      }
+      if (dayPrice.pricePesos() < 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Precio de dia invalido");
+      }
+      jdbc.update("""
+          insert into product_day_prices(product_id, weekday, price_pesos, tenant_id, location_id)
+          values (?, ?, ?, ?, ?)
+          """, productId, dayPrice.weekday(), dayPrice.pricePesos(), tenantId.value(), locationId);
+    }
+  }
+
+  private void replaceComponents(TenantId tenantId, UUID locationId, UUID productId, String kind,
+                                 List<ComponentInput> components) {
+    if (!"COMBO".equals(kind)) {
+      if (!components.isEmpty()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Solo un combo puede tener componentes");
+      }
+      return;
+    }
+    if (components.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "El combo necesita al menos un componente");
+    }
+    jdbc.update("""
+        delete from combo_components
+        where combo_product_id = ? and tenant_id = ? and location_id = ?
+        """, productId, tenantId.value(), locationId);
+    for (var component : components) {
+      if (component.productId().equals(productId) || component.quantity() < 1) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Componente invalido");
+      }
+      var componentKind = jdbc.query("""
+          select kind from products
+          where id = ? and tenant_id = ? and location_id = ?
+          """, (rs, rowNum) -> rs.getString("kind"), component.productId(), tenantId.value(),
+          locationId).stream().findFirst().orElse(null);
+      if (!"PRODUCT".equals(componentKind)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "El componente debe ser un producto");
+      }
+      jdbc.update("""
+          insert into combo_components(combo_product_id, component_product_id, quantity,
+                                      tenant_id, location_id)
+          values (?, ?, ?, ?, ?)
+          """, productId, component.productId(), component.quantity(), tenantId.value(), locationId);
+    }
   }
 
   private void replaceModifierGroups(TenantId tenantId, UUID locationId, UUID productId,
@@ -468,5 +615,24 @@ public class CatalogService {
   }
 
   public record RecipeItemInput(UUID ingredientId, BigDecimal quantity) {
+  }
+
+  public record DayPriceInput(int weekday, long pricePesos) {
+  }
+
+  public record ComponentInput(UUID productId, int quantity) {
+  }
+
+  public record ProductInput(String name, UUID categoryId, long pricePesos, Long costPesos,
+                             String kind, List<Integer> saleDays, List<UUID> modifierGroupIds,
+                             List<UUID> addonIds, List<DayPriceInput> dayPrices,
+                             List<RecipeItemInput> recipe, List<ComponentInput> components) {
+  }
+
+  public record ProductUpdateInput(String name, UUID categoryId, Long pricePesos, Long costPesos,
+                                   Boolean active, List<Integer> saleDays,
+                                   List<UUID> modifierGroupIds, List<UUID> addonIds,
+                                   List<DayPriceInput> dayPrices, List<RecipeItemInput> recipe,
+                                   List<ComponentInput> components) {
   }
 }

@@ -54,9 +54,11 @@ public class CatalogController {
       @Valid @RequestBody ProductRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
     var id = catalog.createProduct(new TenantId(user.tenantId()), user.locationId(),
-        request.name(), request.categoryId(), request.pricePesos(), request.costPesos(),
-        request.kind() == null ? "PRODUCT" : request.kind(), request.saleDays(),
-        request.modifierGroupIds());
+        new CatalogService.ProductInput(request.name(), request.categoryId(),
+            request.pricePesos(), request.costPesos(),
+            request.kind() == null ? "PRODUCT" : request.kind(), request.saleDays(),
+            request.modifierGroupIds(), request.addonIds(), dayPrices(request.dayPrices()),
+            recipe(request.recipe()), components(request.components())));
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
   }
 
@@ -65,9 +67,11 @@ public class CatalogController {
   public ResponseEntity<Void> updateProduct(@PathVariable UUID id,
                                             @Valid @RequestBody ProductUpdate request,
                                             @AuthenticationPrincipal AuthenticatedUser user) {
-    catalog.updateProduct(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
-        request.categoryId(), request.pricePesos(), request.costPesos(), request.active(),
-        request.saleDays(), request.modifierGroupIds());
+    catalog.updateProduct(new TenantId(user.tenantId()), user.locationId(), id,
+        new CatalogService.ProductUpdateInput(request.name(), request.categoryId(),
+            request.pricePesos(), request.costPesos(), request.active(), request.saleDays(),
+            request.modifierGroupIds(), request.addonIds(), dayPrices(request.dayPrices()),
+            recipe(request.recipe()), components(request.components())));
     return ResponseEntity.noContent().build();
   }
 
@@ -114,6 +118,18 @@ public class CatalogController {
   private static List<CatalogService.RecipeItemInput> recipe(List<RecipeItemRequest> items) {
     return items == null ? null : items.stream()
         .map(item -> new CatalogService.RecipeItemInput(item.ingredientId(), item.quantity()))
+        .toList();
+  }
+
+  private static List<CatalogService.DayPriceInput> dayPrices(List<DayPriceRequest> items) {
+    return items == null ? null : items.stream()
+        .map(item -> new CatalogService.DayPriceInput(item.weekday(), item.pricePesos()))
+        .toList();
+  }
+
+  private static List<CatalogService.ComponentInput> components(List<ComponentRequest> items) {
+    return items == null ? null : items.stream()
+        .map(item -> new CatalogService.ComponentInput(item.productId(), item.quantity()))
         .toList();
   }
 
@@ -169,7 +185,11 @@ public class CatalogController {
                                @PositiveOrZero Long costPesos,
                                @Pattern(regexp = "PRODUCT|COMBO") String kind,
                                List<@NotNull @Min(1) @Max(7) Integer> saleDays,
-                               List<@NotNull UUID> modifierGroupIds) {
+                               List<@NotNull UUID> modifierGroupIds,
+                               List<@NotNull UUID> addonIds,
+                               List<@NotNull @Valid DayPriceRequest> dayPrices,
+                               List<@NotNull @Valid RecipeItemRequest> recipe,
+                               List<@NotNull @Valid ComponentRequest> components) {
   }
 
   public record ProductUpdate(@Size(max = 100) String name,
@@ -178,7 +198,11 @@ public class CatalogController {
                                @PositiveOrZero Long costPesos,
                                Boolean active,
                                List<@NotNull @Min(1) @Max(7) Integer> saleDays,
-                               List<@NotNull UUID> modifierGroupIds) {
+                               List<@NotNull UUID> modifierGroupIds,
+                               List<@NotNull UUID> addonIds,
+                               List<@NotNull @Valid DayPriceRequest> dayPrices,
+                               List<@NotNull @Valid RecipeItemRequest> recipe,
+                               List<@NotNull @Valid ComponentRequest> components) {
   }
 
   public record CategoryRequest(@NotBlank @Size(max = 100) String name, Integer sortOrder) {
@@ -225,5 +249,13 @@ public class CatalogController {
 
   public record RecipeItemRequest(@NotNull UUID ingredientId,
                                   @NotNull @DecimalMin("0.001") BigDecimal quantity) {
+  }
+
+  public record DayPriceRequest(@NotNull @Min(1) @Max(7) Integer weekday,
+                                @NotNull @PositiveOrZero Long pricePesos) {
+  }
+
+  public record ComponentRequest(@NotNull UUID productId,
+                                 @NotNull @Min(1) @Max(99) Integer quantity) {
   }
 }
