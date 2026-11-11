@@ -5,6 +5,7 @@ import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
 import { formatSaleDays } from '../sales/sale-days'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 import CategoryPanel from './CategoryPanel'
+import ModifierGroupPanel from './ModifierGroupPanel'
 import ProductForm from './ProductForm'
 import type { AdminProduct, AdminSnapshot, ProductInput } from './catalog-admin'
 
@@ -191,6 +192,10 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
           </Card>
 
           <CategoryPanel categories={categories} onChanged={refreshAll} />
+          <ModifierGroupPanel
+            groups={snapshot?.modifierGroups ?? []}
+            onChanged={refreshAll}
+          />
         </div>
 
         {editing ? (

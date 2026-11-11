@@ -25,6 +25,7 @@ export interface CatalogSnapshotPayload {
     name: string
     minSelection: number
     maxSelection: number
+    active?: boolean
     modifiers: Array<{ id: string; name: string; additionalPricePesos: number }>
   }>
 }
