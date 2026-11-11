@@ -110,12 +110,6 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
 
   const active = movements.filter((movement) => !movement.voidedAt)
   const voided = movements.filter((movement) => movement.voidedAt)
-  const deposits = active.filter((movement) => movement.type === 'DEPOSIT')
-    .reduce((sum, movement) => sum + movement.amountPesos, 0)
-  const withdrawals = active.filter((movement) => movement.type === 'WITHDRAWAL')
-    .reduce((sum, movement) => sum + movement.amountPesos, 0)
-  const expenses = active.filter((movement) => movement.expenseCategoryName)
-    .reduce((sum, movement) => sum + movement.amountPesos, 0)
 
   function movementRow(movement: CashMovementRow, canEdit: boolean) {
     const isExpense = Boolean(movement.expenseCategoryName)
@@ -133,7 +127,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
           {badge.label}
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-40 flex-1">
           <p className="truncate font-medium text-gray-900">{movement.reason}</p>
           {meta ? <p className="truncate text-xs text-gray-500">{meta}</p> : null}
         </div>
@@ -141,7 +135,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
           ${movement.amountPesos.toLocaleString('es-CO')}
         </span>
         {canEdit && open ? (
-          <div className="flex gap-1">
+          <div className="ml-auto flex gap-1">
             <Button variant="ghost" className="px-2 py-1 text-xs"
               onClick={() => {
                 setNotice('')
@@ -179,7 +173,7 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
       {notice ? <p role="status" className="text-sm text-emerald-700">{notice}</p> : null}
 
       {current ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
           <Card>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -201,20 +195,68 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
               ) : null}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-3 text-center text-sm">
-              <div>
-                <p className="text-gray-500">Ingresos</p>
-                <p className="font-semibold text-gray-900">${deposits.toLocaleString('es-CO')}</p>
+            {closing ? (
+              <div data-testid="shift-summary"
+                className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                <h3 className="font-semibold text-gray-900">Resumen del turno</h3>
+                <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Ventas efectivo</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.salesByMethod.CASH.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Ventas tarjeta</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.salesByMethod.CARD.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Ventas Bre-B</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.salesByMethod.BREB.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Devoluciones efectivo</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.refundsByMethod.CASH.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Devoluciones tarjeta</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.refundsByMethod.CARD.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Devoluciones Bre-B</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.refundsByMethod.BREB.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Ingresos</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.depositsPesos.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Retiros</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.withdrawalsPesos.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500">Gastos de caja</dt>
+                    <dd className="font-medium text-gray-900">
+                      ${closing.cashExpensesPesos.toLocaleString('es-CO')}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-              <div>
-                <p className="text-gray-500">Retiros</p>
-                <p className="font-semibold text-gray-900">${withdrawals.toLocaleString('es-CO')}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Gastos</p>
-                <p className="font-semibold text-gray-900">${expenses.toLocaleString('es-CO')}</p>
-              </div>
-            </div>
+            ) : null}
 
             {open && panel ? (
               <CashMovementPanel
@@ -235,7 +277,9 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
               ) : null}
             </div>
             {active.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-500">Sin movimientos.</p>
+              <p className="mt-2 text-sm text-gray-500">
+                Sin movimientos todavía. Usa Registrar movimiento para un ingreso, retiro o gasto.
+              </p>
             ) : (
               <ul className="mt-2">{active.map((movement) => movementRow(movement, true))}</ul>
             )}
@@ -256,10 +300,10 @@ export default function CashScreen({ database = db }: { database?: CajaDb }) {
             ) : null}
           </Card>
 
-          <div>
+          <div className="lg:sticky lg:top-24">
             {open ? (
               <ShiftClosePanel database={database} expectedPesos={expected}
-                summary={closing} onClosed={onClosed} />
+                onClosed={onClosed} />
             ) : (
               openForm
             )}
