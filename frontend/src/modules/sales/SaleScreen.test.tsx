@@ -416,6 +416,7 @@ it('muestra el vuelto de un pago en efectivo', async () => {
 
   expect(create).toHaveBeenCalledTimes(1)
   expect(create.mock.calls[0][0].payments).toEqual([{ method: 'CASH', amountPesos: 16500 }])
+  expect(create.mock.calls[0][0].cashReceivedPesos).toBe(20000)
 })
 
 it('no cobra si el efectivo recibido no alcanza', async () => {

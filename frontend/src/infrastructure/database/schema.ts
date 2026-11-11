@@ -61,6 +61,7 @@ export interface SaleRow {
   userId: string
   tableLabel?: string | null
   deliveryFeePesos: number
+  cashReceivedPesos?: number | null
 }
 
 export interface SaleItemRow {

@@ -145,6 +145,10 @@ export function buildReceiptHtml(data: ReceiptData): string {
   const delivery = sale.deliveryFeePesos > 0
     ? `<div class="row"><span>Envío</span><span>${money(sale.deliveryFeePesos)}</span></div>`
     : ''
+  const cashChange = sale.cashReceivedPesos != null
+    ? `<div class="row"><span>Recibido</span><span>${money(sale.cashReceivedPesos)}</span></div>
+       <div class="row"><span>Cambio</span><span>${money(sale.cashReceivedPesos - sale.totalPesos)}</span></div>`
+    : ''
 
   return `<!doctype html>
 <html lang="es">
@@ -188,6 +192,7 @@ export function buildReceiptHtml(data: ReceiptData): string {
   <div class="row total"><span>Total</span><span>${money(sale.totalPesos)}</span></div>
   <hr>
   ${paymentsHtml}
+  ${cashChange}
   <div class="footer">Gracias por su visita</div>
 </body>
 </html>`

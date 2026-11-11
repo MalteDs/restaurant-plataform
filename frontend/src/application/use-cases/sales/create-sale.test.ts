@@ -156,3 +156,21 @@ it('guarda nota y orden de línea para el comprobante', async () => {
   expect(stored?.note).toBe('Sin cebolla')
   expect(stored?.lineNumber).toBe(1)
 })
+
+it('guarda el efectivo recibido del pago en efectivo', async () => {
+  const db = await seed()
+
+  const out = await createSale(db, { ...baseInput(), cashReceivedPesos: 40000 })
+
+  expect((await db.sales.get(out.saleId))?.cashReceivedPesos).toBe(40000)
+})
+
+it('rechaza efectivo recibido menor al total', async () => {
+  const db = await seed()
+
+  await expect(createSale(db, {
+    ...baseInput(),
+    cashReceivedPesos: 1000
+  })).rejects.toThrow(/efectivo recibido/i)
+  expect(await db.sales.count()).toBe(0)
+})
