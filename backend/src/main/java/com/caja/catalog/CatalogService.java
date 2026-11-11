@@ -34,11 +34,11 @@ public class CatalogService {
   }
 
   public List<ProductView> findAll(TenantId tenantId, UUID locationId) {
-    return snapshot(tenantId, locationId).products();
+    return snapshot(tenantId, locationId, false).products();
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CatalogSnapshot snapshot(TenantId tenantId, UUID locationId) {
+  public CatalogSnapshot snapshot(TenantId tenantId, UUID locationId, boolean includeInactive) {
     var version = jdbc.query("""
         select catalog_version from locations where id = ? and tenant_id = ?
         """, (rs, rowNum) -> rs.getLong("catalog_version"), locationId, tenantId.value())
@@ -47,11 +47,11 @@ public class CatalogService {
     var categories = jdbc.query("""
         select id, name, sort_order, active
         from categories
-        where tenant_id = ? and location_id = ? and active
+        where tenant_id = ? and location_id = ? and (? or active)
         order by sort_order, name
         """, (rs, rowNum) -> new CategoryView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("sort_order"),
-        rs.getBoolean("active")), tenantId.value(), locationId);
+        rs.getBoolean("active")), tenantId.value(), locationId, includeInactive);
 
     var products = jdbc.query("""
         select p.id, p.tenant_id, p.location_id, p.category_id,
@@ -60,7 +60,7 @@ public class CatalogService {
         from products p
         left join categories c
           on c.id = p.category_id and c.tenant_id = p.tenant_id and c.location_id = p.location_id
-        where p.tenant_id = ? and p.location_id = ? and p.active
+        where p.tenant_id = ? and p.location_id = ? and (? or p.active)
         order by p.sort_order, p.name
         """, (rs, rowNum) -> new ProductView(
         rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
@@ -69,16 +69,17 @@ public class CatalogService {
         rs.getString("name"), rs.getLong("price_pesos"),
         (Long) rs.getObject("cost_pesos"), rs.getInt("sort_order"), rs.getBoolean("active"),
         new ArrayList<>(), new ArrayList<>(), parseSaleDays(rs.getString("sale_days"))),
-        tenantId.value(), locationId);
+        tenantId.value(), locationId, includeInactive);
 
     var groups = jdbc.query("""
-        select id, name, min_selection, max_selection
+        select id, name, min_selection, max_selection, active
         from modifier_groups
-        where tenant_id = ? and location_id = ? and active
+        where tenant_id = ? and location_id = ? and (? or active)
         order by name
         """, (rs, rowNum) -> new ModifierGroupView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("min_selection"),
-        rs.getInt("max_selection"), new ArrayList<>()), tenantId.value(), locationId);
+        rs.getInt("max_selection"), rs.getBoolean("active"), new ArrayList<>()),
+        tenantId.value(), locationId, includeInactive);
 
     var modifiersByGroup = new LinkedHashMap<UUID, List<ModifierView>>();
     jdbc.query("""

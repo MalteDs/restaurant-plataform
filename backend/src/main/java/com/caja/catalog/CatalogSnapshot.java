@@ -19,7 +19,7 @@ public record CatalogSnapshot(long version, List<CategoryView> categories, List<
   }
 
   public record ModifierGroupView(UUID id, String name, int minSelection, int maxSelection,
-                                  List<ModifierView> modifiers) {
+                                  boolean active, List<ModifierView> modifiers) {
   }
 
   public record ModifierView(UUID id, String name, long additionalPricePesos) {

@@ -36,7 +36,13 @@ public class CatalogController {
 
   @GetMapping
   public CatalogSnapshot snapshot(@AuthenticationPrincipal AuthenticatedUser user) {
-    return catalog.snapshot(new TenantId(user.tenantId()), user.locationId());
+    return catalog.snapshot(new TenantId(user.tenantId()), user.locationId(), false);
+  }
+
+  @GetMapping("/admin")
+  @PreAuthorize("hasRole('ADMIN')")
+  public CatalogSnapshot adminSnapshot(@AuthenticationPrincipal AuthenticatedUser user) {
+    return catalog.snapshot(new TenantId(user.tenantId()), user.locationId(), true);
   }
 
   @PostMapping("/products")
