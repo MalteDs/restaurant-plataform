@@ -206,6 +206,15 @@ it('crea un combo con productos y cantidades', async () => {
   })
 })
 
+it('abre la subsección de adicionales desde el catálogo', async () => {
+  mockAdminSnapshot({ products: [], categories: [] })
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: /^adicionales$/i }))
+  expect(screen.getByLabelText(/nombre del adicional/i)).toBeInTheDocument()
+})
+
 it('avisa si no puede sincronizar la caja local después de guardar', async () => {
   mockAdminSnapshot({
     products: [],

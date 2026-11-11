@@ -4,6 +4,7 @@ import { request } from '../../infrastructure/api/client'
 import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
 import { formatSaleDays } from '../sales/sale-days'
 import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
+import AddonsPanel from './AddonsPanel'
 import CategoryPanel from './CategoryPanel'
 import ProductForm from './ProductForm'
 import type {
@@ -251,7 +252,9 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
         </div>
       ) : null}
 
-      {section === 'Adicionales' ? <Card><p className="text-sm text-gray-500">Sin adicionales.</p></Card> : null}
+      {section === 'Adicionales' ? (
+        <AddonsPanel addons={addons} ingredients={ingredients} onChanged={refreshAll} />
+      ) : null}
       {section === 'Ingredientes' ? <Card><p className="text-sm text-gray-500">Sin ingredientes.</p></Card> : null}
       {section === 'Categorías' ? <CategoryPanel categories={categories} onChanged={refreshAll} /> : null}
     </div>
