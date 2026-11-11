@@ -44,6 +44,7 @@ export interface ModifierGroupRow {
   name: string
   minSelection: number
   maxSelection: number
+  active?: boolean
   modifiers: ModifierRow[]
 }
 

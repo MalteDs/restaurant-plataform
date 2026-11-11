@@ -41,6 +41,7 @@ export default function SaleScreen({
   const [tableLabel, setTableLabel] = useState('')
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [method, setMethod] = useState<PaymentMethod>('CASH')
+  const [cashReceived, setCashReceived] = useState('')
   const [splitMode, setSplitMode] = useState(false)
   const [parts, setParts] = useState<Array<{
     key: string
@@ -115,6 +116,7 @@ export default function SaleScreen({
     components: line.product.components
   }), 0) + (type === 'DELIVERY' ? deliveryFee : 0)
   const remaining = total - parts.reduce((sum, part) => sum + part.amountPesos, 0)
+  const received = Number(cashReceived)
 
   function addLine(product: ProductRow, modifiers: ModifierRow[]) {
     setCart((current) => addToCart(current, product, modifiers))
@@ -277,6 +279,11 @@ export default function SaleScreen({
       setError('Los pagos no suman el total')
       return
     }
+    if (!splitMode && method === 'CASH' && cashReceived.trim() !== '' && received < total) {
+      lastCharge.current = 0
+      setError('El efectivo recibido no alcanza el total')
+      return
+    }
     const payments = splitMode
       ? parts.map((part) => ({ method: part.method, amountPesos: part.amountPesos }))
       : [{ method, amountPesos: total }]
@@ -303,6 +310,7 @@ export default function SaleScreen({
       })
       setCart([])
       setCartOpen(false)
+      setCashReceived('')
       setSplitMode(false)
       setParts([])
       setLastSale(created)
@@ -531,6 +539,24 @@ export default function SaleScreen({
                         <option value="BREB">Bre-B</option>
                       </select>
                     </label>
+                    {method === 'CASH' ? (
+                      <>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Efectivo recibido (opcional)
+                          <Input className="mt-1" type="number" inputMode="numeric" min={0}
+                            value={cashReceived}
+                            onChange={(event) => setCashReceived(event.target.value)} />
+                        </label>
+                        {cashReceived.trim() !== '' ? (
+                          <p aria-live="polite"
+                            className={received >= total ? 'text-sm text-green-700' : 'text-sm text-amber-700'}>
+                            {received >= total
+                              ? `Vuelto $${(received - total).toLocaleString('es-CO')}`
+                              : `Faltan $${(total - received).toLocaleString('es-CO')}`}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
                     <Button variant="ghost" className="w-full" onClick={startSplit}
                       disabled={cart.length === 0}>
                       Dividir pago

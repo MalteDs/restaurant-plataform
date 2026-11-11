@@ -63,6 +63,7 @@ export async function closeShift(
   if (note) {
     await page.getByLabel(/nota del cierre/i).fill(note)
   }
+  page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: /cerrar turno/i }).click()
 }
 

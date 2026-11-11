@@ -34,11 +34,11 @@ public class CatalogService {
   }
 
   public List<ProductView> findAll(TenantId tenantId, UUID locationId) {
-    return snapshot(tenantId, locationId).products();
+    return snapshot(tenantId, locationId, false).products();
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CatalogSnapshot snapshot(TenantId tenantId, UUID locationId) {
+  public CatalogSnapshot snapshot(TenantId tenantId, UUID locationId, boolean includeInactive) {
     var version = jdbc.query("""
         select catalog_version from locations where id = ? and tenant_id = ?
         """, (rs, rowNum) -> rs.getLong("catalog_version"), locationId, tenantId.value())
@@ -47,11 +47,11 @@ public class CatalogService {
     var categories = jdbc.query("""
         select id, name, sort_order, active
         from categories
-        where tenant_id = ? and location_id = ? and active
+        where tenant_id = ? and location_id = ? and (? or active)
         order by sort_order, name
         """, (rs, rowNum) -> new CategoryView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("sort_order"),
-        rs.getBoolean("active")), tenantId.value(), locationId);
+        rs.getBoolean("active")), tenantId.value(), locationId, includeInactive);
 
     var products = jdbc.query("""
         select p.id, p.tenant_id, p.location_id, p.category_id,
@@ -60,7 +60,7 @@ public class CatalogService {
         from products p
         left join categories c
           on c.id = p.category_id and c.tenant_id = p.tenant_id and c.location_id = p.location_id
-        where p.tenant_id = ? and p.location_id = ? and p.active
+        where p.tenant_id = ? and p.location_id = ? and (? or p.active)
         order by p.sort_order, p.name
         """, (rs, rowNum) -> new ProductView(
         rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
@@ -69,16 +69,17 @@ public class CatalogService {
         rs.getString("name"), rs.getLong("price_pesos"),
         (Long) rs.getObject("cost_pesos"), rs.getInt("sort_order"), rs.getBoolean("active"),
         new ArrayList<>(), new ArrayList<>(), parseSaleDays(rs.getString("sale_days"))),
-        tenantId.value(), locationId);
+        tenantId.value(), locationId, includeInactive);
 
     var groups = jdbc.query("""
-        select id, name, min_selection, max_selection
+        select id, name, min_selection, max_selection, active
         from modifier_groups
-        where tenant_id = ? and location_id = ? and active
+        where tenant_id = ? and location_id = ? and (? or active)
         order by name
         """, (rs, rowNum) -> new ModifierGroupView(
         rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("min_selection"),
-        rs.getInt("max_selection"), new ArrayList<>()), tenantId.value(), locationId);
+        rs.getInt("max_selection"), rs.getBoolean("active"), new ArrayList<>()),
+        tenantId.value(), locationId, includeInactive);
 
     var modifiersByGroup = new LinkedHashMap<UUID, List<ModifierView>>();
     jdbc.query("""
@@ -132,7 +133,7 @@ public class CatalogService {
   @Transactional
   public UUID createProduct(TenantId tenantId, UUID locationId, String name, UUID categoryId,
                             long pricePesos, Long costPesos, String kind,
-                            List<Integer> saleDays) {
+                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
     var id = UUID.randomUUID();
     try {
       jdbc.update("""
@@ -145,6 +146,9 @@ public class CatalogService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "El producto ya existe o es invalido");
     }
     bumpVersion(tenantId, locationId);
+    if (modifierGroupIds != null && !modifierGroupIds.isEmpty()) {
+      replaceModifierGroups(tenantId, locationId, id, modifierGroupIds);
+    }
     audit.record(tenantId.value(), locationId, null, "CATALOG_PRODUCT_CREATED", "product", id,
         Map.of("name", name, "pricePesos", pricePesos));
     return id;
@@ -153,7 +157,7 @@ public class CatalogService {
   @Transactional
   public void updateProduct(TenantId tenantId, UUID locationId, UUID productId, String name,
                             UUID categoryId, Long pricePesos, Long costPesos, Boolean active,
-                            List<Integer> saleDays) {
+                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
     if (name != null && name.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
     }
@@ -170,7 +174,32 @@ public class CatalogService {
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
+    if (modifierGroupIds != null) {
+      replaceModifierGroups(tenantId, locationId, productId, modifierGroupIds);
+    }
     bumpVersion(tenantId, locationId);
+  }
+
+  private void replaceModifierGroups(TenantId tenantId, UUID locationId, UUID productId,
+                                     List<UUID> groupIds) {
+    jdbc.update("""
+        delete from product_modifier_groups
+        where product_id = ? and tenant_id = ? and location_id = ?
+        """, productId, tenantId.value(), locationId);
+    for (var groupId : groupIds) {
+      var exists = jdbc.queryForObject("""
+          select count(*) from modifier_groups
+          where id = ? and tenant_id = ? and location_id = ?
+          """, Integer.class, groupId, tenantId.value(), locationId);
+      if (exists == null || exists == 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Grupo de modificadores invalido");
+      }
+      jdbc.update("""
+          insert into product_modifier_groups(product_id, modifier_group_id, tenant_id, location_id)
+          values (?, ?, ?, ?)
+          """, productId, groupId, tenantId.value(), locationId);
+    }
   }
 
   @Transactional

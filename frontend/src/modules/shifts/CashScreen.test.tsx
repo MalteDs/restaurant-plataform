@@ -99,8 +99,43 @@ it('un cajero puede usar Caja', async () => {
   expect(await screen.findByRole('button', { name: /registrar movimiento/i }, { timeout: 5000 })).toBeInTheDocument()
 })
 
+it('muestra el resumen del turno antes de cerrar', async () => {
+  const db = await seedWithShift()
+  await db.sales.put({
+    id: 's1', displayCode: 'ALM-A-1', status: 'CHARGED', totalPesos: 16500,
+    type: 'COUNTER', method: 'CASH', operationalDate: today, createdAt: new Date().toISOString(),
+    shiftId: 'shift-1', userId: 'u1', deliveryFeePesos: 0
+  })
+  await db.payments.put({ id: 'p1', saleId: 's1', method: 'CASH', amountPesos: 16500 })
+  await db.cashMovements.put({
+    id: 'm1', shiftId: 'shift-1', type: 'WITHDRAWAL', amountPesos: 5000,
+    reason: 'compra lechuga', operationalDate: today, expenseCategoryName: 'Fruver'
+  })
+
+  render(<CashScreen database={db} />)
+
+  const summary = await screen.findByTestId('shift-summary', {}, { timeout: 5000 })
+  expect(summary).toHaveTextContent(/ventas efectivo/i)
+  expect(summary).toHaveTextContent(/16\.500/)
+  expect(summary).toHaveTextContent(/gastos de caja/i)
+  expect(summary).toHaveTextContent(/5\.000/)
+})
+
+it('no cierra si se cancela la confirmación', async () => {
+  const db = await seedWithShift()
+  vi.spyOn(window, 'confirm').mockReturnValue(false)
+  render(<CashScreen database={db} />)
+
+  await userEvent.type(await screen.findByLabelText(/cantidad de 50\.000/i), '1')
+  await userEvent.click(screen.getByRole('button', { name: /cerrar turno/i }))
+
+  expect((await db.shifts.get('shift-1'))?.closedAt).toBeNull()
+  expect(screen.getByRole('button', { name: /cerrar turno/i })).toBeInTheDocument()
+})
+
 it('cierra con denominaciones y exige nota si hay diferencia', async () => {
   const db = await seedWithShift()
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
   render(<CashScreen database={db} />)
 
   await userEvent.type(await screen.findByLabelText(/cantidad de 20\.000/i, {}, { timeout: 5000 }), '2')
@@ -112,6 +147,7 @@ it('cierra con denominaciones y exige nota si hay diferencia', async () => {
   await userEvent.type(screen.getByLabelText(/nota del cierre/i), 'faltante revisado')
   await userEvent.click(screen.getByRole('button', { name: /cerrar turno/i }))
   await waitFor(() => expect(screen.getByTestId('difference')).toHaveTextContent('-7.000'))
+  await screen.findByText(/turno cerrado/i)
 })
 
 it('muestra el turno cerrado en el historial y permite descargar', async () => {
