@@ -1,0 +1,54 @@
+databaseChangeLog:
+  - changeSet:
+      id: 028-ingredients-recipes
+      author: caja
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TYPE ingredient_unit AS ENUM ('UNIT', 'GRAM');
+
+              CREATE TABLE ingredients (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                name varchar(100) NOT NULL CHECK (btrim(name) <> ''),
+                unit ingredient_unit NOT NULL,
+                waste_percent numeric(5,2) NOT NULL DEFAULT 0
+                  CHECK (waste_percent BETWEEN 0 AND 100),
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT ingredients_location_name_uk UNIQUE (location_id, name),
+                CONSTRAINT ingredients_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT ingredients_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE recipe_items (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                product_id uuid,
+                addon_id uuid,
+                ingredient_id uuid NOT NULL,
+                quantity numeric(12,3) NOT NULL CHECK (quantity > 0),
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT recipe_items_owner_ck
+                  CHECK ((product_id IS NOT NULL) <> (addon_id IS NOT NULL)),
+                CONSTRAINT recipe_items_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT recipe_items_product_fk FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT recipe_items_addon_fk FOREIGN KEY (addon_id, tenant_id, location_id)
+                  REFERENCES addons(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT recipe_items_ingredient_fk
+                  FOREIGN KEY (ingredient_id, tenant_id, location_id)
+                  REFERENCES ingredients(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+              CREATE UNIQUE INDEX recipe_items_product_ingredient_uk
+                ON recipe_items (product_id, ingredient_id) WHERE product_id IS NOT NULL;
+              CREATE UNIQUE INDEX recipe_items_addon_ingredient_uk
+                ON recipe_items (addon_id, ingredient_id) WHERE addon_id IS NOT NULL;
+              CREATE INDEX recipe_items_ingredient_idx ON recipe_items (ingredient_id);

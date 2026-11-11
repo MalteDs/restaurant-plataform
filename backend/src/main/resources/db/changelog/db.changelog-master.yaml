@@ -15,3 +15,9 @@ databaseChangeLog:
       file: db/changelog/024-expense-categories.yaml
   - include:
       file: db/changelog/025-caja-operacion.yaml
+  - include:
+      file: db/changelog/026-catalog-addons.yaml
+  - include:
+      file: db/changelog/027-product-day-prices.yaml
+  - include:
+      file: db/changelog/028-ingredients-recipes.yaml

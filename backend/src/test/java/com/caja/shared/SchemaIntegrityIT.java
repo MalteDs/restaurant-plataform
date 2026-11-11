@@ -31,11 +31,37 @@ class SchemaIntegrityIT {
         "modifiers", "product_modifier_groups", "combo_components", "shifts", "sales", "sale_items",
         "sale_item_modifiers", "sale_item_components", "payments", "cash_movements", "refunds",
         "expenses", "expense_categories", "orders", "order_items", "sync_operations",
-        "audit_events");
+        "audit_events", "addons", "product_addons", "sale_item_addons", "product_day_prices",
+        "ingredients", "recipe_items");
     var actual = new HashSet<>(jdbc.queryForList(
         "select table_name from information_schema.tables where table_schema = 'public'", String.class));
     assertTrue(actual.containsAll(expected), () -> "Faltan tablas: " + expected.stream()
         .filter(table -> !actual.contains(table)).toList());
+  }
+
+  @Test void catalogExtensionTablesAndColumnsExist() {
+    var columns = jdbc.queryForList(
+        "select table_name || '.' || column_name from information_schema.columns "
+            + "where table_schema = 'public'", String.class);
+    assertTrue(columns.containsAll(Set.of(
+        "addons.price_pesos", "product_addons.addon_id", "sale_item_addons.quantity",
+        "product_day_prices.weekday", "ingredients.unit", "recipe_items.quantity")));
+  }
+
+  @Test void migrationCopiesLegacyModifiersWithoutDuplicatingNames() {
+    var sencillaId = jdbc.queryForObject(
+        "select id from products where name = 'SENCILLA'", UUID.class);
+    var addonNames = jdbc.queryForList("""
+        select a.name from product_addons pa join addons a on a.id = pa.addon_id
+        where pa.product_id = ?
+        """, String.class, sencillaId);
+    assertTrue(addonNames.contains("Carne Angus"));
+    assertTrue(addonNames.contains("Papa + Gaseosa Postobon 250ml"));
+    assertEquals(0, jdbc.queryForObject("""
+        select count(*) from (
+          select location_id, name from addons group by location_id, name having count(*) > 1
+        ) duplicates
+        """, Integer.class));
   }
 
   @Test void cajaColumnsExist() {
