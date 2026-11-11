@@ -9,6 +9,7 @@ import {
   saleTypeLabel,
   type ReceiptData
 } from '../printing/receipt'
+import { saleItemAddons } from '../sales/addons'
 import { Button, Card, FormError, Input } from '../../shared/ui'
 
 interface OrderDetailPanelProps {
@@ -172,9 +173,9 @@ export default function OrderDetailPanel({
                 </span>
                 <span className="whitespace-nowrap">{money(item.lineTotalPesos)}</span>
               </div>
-              {item.modifiers.map((modifier, index) => (
-                <div key={`${item.id}-modifier-${index}`} className="pl-3 text-xs text-gray-600">
-                  + {modifier.name} {money(modifier.additionalPricePesos)}
+              {saleItemAddons(item).map((addon, index) => (
+                <div key={`${item.id}-addon-${index}`} className="pl-3 text-xs text-gray-600">
+                  + {addon.quantity} × {addon.name} {money(addon.pricePesos * addon.quantity)}
                 </div>
               ))}
               {item.components.map((component, index) => (

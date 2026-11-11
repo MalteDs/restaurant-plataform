@@ -4,6 +4,7 @@ import type {
   SaleItemRow,
   SaleRow
 } from '../../infrastructure/database/schema'
+import { saleItemAddons } from '../sales/addons'
 
 export interface ReceiptData {
   sale: SaleRow
@@ -79,15 +80,15 @@ export function saleTypeLabel(sale: SaleRow): string {
 
 function itemsHtml(items: SaleItemRow[]): string {
   return items.map((item) => {
-    const modifiers = item.modifiers.map((modifier) =>
-      `<div class="modifier">+ ${escapeHtml(modifier.name)} ${money(modifier.additionalPricePesos)}</div>`
+    const addons = saleItemAddons(item).map((addon) =>
+      `<div class="modifier">+ ${addon.quantity} × ${escapeHtml(addon.name)} ${money(addon.pricePesos * addon.quantity)}</div>`
     ).join('')
     const note = item.note
       ? `<div class="note">Nota: ${escapeHtml(item.note)}</div>`
       : ''
     return `<div class="item">
       <div class="row"><span class="item-name">${item.quantity} x ${escapeHtml(item.productName)}</span><span class="item-price">${money(item.lineTotalPesos)}</span></div>
-      ${modifiers}${note}
+      ${addons}${note}
     </div>`
   }).join('')
 }

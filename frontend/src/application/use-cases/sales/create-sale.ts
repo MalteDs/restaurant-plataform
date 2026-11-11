@@ -1,5 +1,5 @@
 import { notifyOperationQueued } from '../../../infrastructure/synchronization/notify'
-import { db, type CajaDb, type ComponentRow, type ModifierRow } from '../../../infrastructure/database/schema'
+import { db, type CajaDb, type ComponentRow, type SaleAddonRow } from '../../../infrastructure/database/schema'
 import { activeUserId } from '../../../modules/auth/session'
 
 export interface SaleItemInput {
@@ -12,7 +12,7 @@ export interface SaleItemInput {
   costPesos: number | null
   note?: string | null
   overrideReason?: string | null
-  modifiers: ModifierRow[]
+  addons: SaleAddonRow[]
   components: ComponentRow[]
 }
 
@@ -42,12 +42,12 @@ export interface CreateSaleDeps {
   now?: Date
 }
 
-function modifiersTotal(item: SaleItemInput): number {
-  return item.modifiers.reduce((sum, modifier) => sum + modifier.additionalPricePesos, 0)
+function addonsTotal(item: SaleItemInput): number {
+  return item.addons.reduce((sum, addon) => sum + addon.pricePesos * addon.quantity, 0)
 }
 
 export function lineTotal(item: SaleItemInput): number {
-  return item.quantity * (item.unitPricePesos + modifiersTotal(item))
+  return item.quantity * (item.unitPricePesos + addonsTotal(item))
 }
 
 function localDate(now: Date): string {
@@ -168,7 +168,7 @@ export async function createSale(
             lineTotalPesos: lineTotal(item),
             note: item.note ?? null,
             lineNumber: index + 1,
-            modifiers: item.modifiers,
+            addons: item.addons,
             components: item.components
           }
         })
@@ -208,10 +208,11 @@ export async function createSale(
               : null,
             costPesos: item.costPesos,
             note: item.note ?? null,
-            modifiers: item.modifiers.map((modifier) => ({
-              modifierId: modifier.id,
-              modifierName: modifier.name,
-              additionalPricePesos: modifier.additionalPricePesos
+            addons: item.addons.map((addon) => ({
+              addonId: addon.id,
+              addonName: addon.name,
+              additionalPricePesos: addon.pricePesos,
+              quantity: addon.quantity
             })),
             components: item.components.map((component) => ({
               productId: component.productId,
