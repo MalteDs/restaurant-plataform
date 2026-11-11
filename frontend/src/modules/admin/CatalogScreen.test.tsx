@@ -179,6 +179,33 @@ it('guarda días, precio por día, adicionales y receta', async () => {
   })
 })
 
+it('crea un combo con productos y cantidades', async () => {
+  mockAdminSnapshot({
+    products: [product({ id: 'p1', name: 'SENCILLA', kind: 'PRODUCT' })],
+    categories: [category({ id: 'c1', name: 'HAMBURGUESAS' })]
+  })
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: /^combos$/i }))
+  await userEvent.click(await screen.findByRole('button', { name: /nuevo combo/i }))
+  await userEvent.type(screen.getByLabelText(/^nombre$/i), 'COMBO PRUEBA')
+  await userEvent.type(screen.getByLabelText(/^precio$/i), '25000')
+  await userEvent.selectOptions(screen.getByLabelText(/producto componente/i), 'p1')
+  await userEvent.clear(screen.getByLabelText(/cantidad del componente/i))
+  await userEvent.type(screen.getByLabelText(/cantidad del componente/i), '2')
+  await userEvent.click(screen.getByRole('button', { name: /agregar componente/i }))
+  await userEvent.click(screen.getByRole('button', { name: /guardar producto/i }))
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/catalog/products',
+    expect.objectContaining({ method: 'POST' })))
+  const call = vi.mocked(request).mock.calls.find(([path]) => path === '/api/catalog/products')
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+    kind: 'COMBO',
+    components: [{ productId: 'p1', quantity: 2 }]
+  })
+})
+
 it('avisa si no puede sincronizar la caja local después de guardar', async () => {
   mockAdminSnapshot({
     products: [],

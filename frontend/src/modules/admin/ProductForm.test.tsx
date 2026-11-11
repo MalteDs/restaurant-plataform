@@ -14,6 +14,7 @@ it('no envía un precio de día igual al precio base', async () => {
       categories={categories}
       addons={[]}
       ingredients={[]}
+      productOptions={[]}
       onSave={onSave}
       onCancel={vi.fn()}
     />
