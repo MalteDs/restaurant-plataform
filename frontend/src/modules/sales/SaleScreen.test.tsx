@@ -28,6 +28,24 @@ afterEach(async () => {
   }
 })
 
+async function seedProduct({ pricePesos }: { pricePesos: number }): Promise<CajaDb> {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1',
+    name: 'SENCILLA',
+    categoryName: 'HAMBURGUESAS',
+    kind: 'PRODUCT',
+    pricePesos,
+    costPesos: null,
+    sortOrder: 1,
+    active: true,
+    modifierGroupIds: [],
+    components: []
+  })
+  return db
+}
+
 it('un doble clic crea una sola venta', async () => {
   const db = openDb(`test-screen-${crypto.randomUUID()}`)
   opened.push(db)
@@ -381,6 +399,37 @@ it('imprime automáticamente al cobrar y permite reimprimir', async () => {
   expect(screen.getByText(/si la tirilla no salió/i)).toBeInTheDocument()
   await userEvent.click(await screen.findByRole('button', { name: /imprimir comprobante/i }))
   expect(print).toHaveBeenCalledTimes(2)
+})
+
+it('muestra el vuelto de un pago en efectivo', async () => {
+  const db = await seedProduct({ pricePesos: 16500 })
+  const create = vi.fn().mockResolvedValue({
+    saleId: 's1', displayCode: 'ALM-A-000001', totalPesos: 16500
+  })
+  renderScreen({ database: db, onCreateSale: create })
+
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.type(screen.getByLabelText(/efectivo recibido/i), '20000')
+
+  expect(screen.getByText(/vuelto \$3\.500/i)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
+
+  expect(create).toHaveBeenCalledTimes(1)
+  expect(create.mock.calls[0][0].payments).toEqual([{ method: 'CASH', amountPesos: 16500 }])
+})
+
+it('no cobra si el efectivo recibido no alcanza', async () => {
+  const db = await seedProduct({ pricePesos: 16500 })
+  const create = vi.fn()
+  renderScreen({ database: db, onCreateSale: create })
+
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.type(screen.getByLabelText(/efectivo recibido/i), '10000')
+  expect(screen.getByText(/faltan \$6\.500/i)).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: /cobrar/i }))
+  expect(create).not.toHaveBeenCalled()
+  expect(screen.getByText(/efectivo recibido no alcanza/i)).toBeInTheDocument()
 })
 
 it('avisa si falla la impresión y conserva la venta', async () => {
