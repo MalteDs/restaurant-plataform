@@ -25,7 +25,7 @@ export function Button({
 export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 ${className}`}
+      className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:ring-2 focus:ring-brand-700/30 ${className}`}
       {...props}
     />
   )

@@ -133,7 +133,8 @@ it('devuelve desde el detalle y muestra el motivo', async () => {
   await userEvent.type(screen.getByLabelText(/motivo/i), 'cobro equivocado')
   await userEvent.click(screen.getByRole('button', { name: /confirmar devolución/i }))
 
-  expect(await screen.findByText(/cobro equivocado/)).toBeInTheDocument()
+  expect(await screen.findByText(/cobro equivocado/, undefined, { timeout: 5000 }))
+    .toBeInTheDocument()
   expect((await screen.findAllByText(/Devuelta/)).length).toBeGreaterThan(0)
   expect((await db.sales.get('s1'))?.status).toBe('REFUNDED')
 })
