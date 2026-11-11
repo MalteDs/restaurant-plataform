@@ -50,6 +50,9 @@ function product(overrides: Record<string, unknown> = {}) {
     sortOrder: 0,
     active: true,
     saleDays: [],
+    addonIds: [],
+    dayPrices: [],
+    recipe: [],
     modifierGroupIds: [],
     components: [],
     ...overrides
@@ -59,6 +62,8 @@ function product(overrides: Record<string, unknown> = {}) {
 function mockAdminSnapshot(input: {
   products: unknown[]
   categories: unknown[]
+  addons?: unknown[]
+  ingredients?: unknown[]
   modifierGroups?: unknown[]
 }) {
   vi.mocked(request).mockImplementation((path: string) => {
@@ -67,6 +72,8 @@ function mockAdminSnapshot(input: {
         version: 1,
         products: input.products,
         categories: input.categories,
+        addons: input.addons ?? [],
+        ingredients: input.ingredients ?? [],
         modifierGroups: input.modifierGroups ?? []
       } as never)
     }
@@ -93,7 +100,7 @@ it('lista activos e inactivos y busca por nombre', async () => {
 
   expect(await screen.findByText('PRODUCTO VIEJO')).toBeInTheDocument()
   expect(screen.getByText('Inactivo')).toBeInTheDocument()
-  await userEvent.type(screen.getByLabelText(/buscar producto/i), 'sencilla')
+  await userEvent.type(screen.getByLabelText(/^buscar$/i), 'sencilla')
   await waitFor(() => expect(screen.queryByText('PRODUCTO VIEJO')).not.toBeInTheDocument())
 })
 
@@ -139,6 +146,37 @@ it('reactiva un producto inactivo', async () => {
     ([path, init]) => path === '/api/catalog/products/p1' && init?.method === 'PUT'
   )
   expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ active: true })
+})
+
+it('guarda días, precio por día, adicionales y receta', async () => {
+  mockAdminSnapshot({
+    products: [],
+    categories: [category({ id: 'c1', name: 'HAMBURGUESAS' })],
+    addons: [{ id: 'a1', name: 'Tocineta', pricePesos: 5000, active: true, recipe: [] }],
+    ingredients: [{ id: 'i1', name: 'Carne', unit: 'UNIT', wastePercent: 0, active: true }]
+  })
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: /nuevo producto/i }))
+  await userEvent.type(screen.getByLabelText(/^nombre$/i), 'HAMBURGUESA')
+  await userEvent.type(screen.getByLabelText(/^precio$/i), '20000')
+  await userEvent.click(screen.getByLabelText(/^lunes$/i))
+  await userEvent.type(screen.getByLabelText(/precio del lunes/i), '18000')
+  await userEvent.click(screen.getByLabelText(/^tocineta/i))
+  await userEvent.selectOptions(screen.getByLabelText(/^ingrediente 1$/i), 'i1')
+  await userEvent.type(screen.getByLabelText(/cantidad 1/i), '120')
+  await userEvent.click(screen.getByRole('button', { name: /guardar producto/i }))
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/catalog/products',
+    expect.objectContaining({ method: 'POST' })))
+  const call = vi.mocked(request).mock.calls.find(([path]) => path === '/api/catalog/products')
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+    saleDays: [1],
+    dayPrices: [{ weekday: 1, pricePesos: 18000 }],
+    addonIds: ['a1'],
+    recipe: [{ ingredientId: 'i1', quantity: 120 }]
+  })
 })
 
 it('avisa si no puede sincronizar la caja local después de guardar', async () => {

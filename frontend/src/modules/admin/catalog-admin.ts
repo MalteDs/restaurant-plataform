@@ -20,6 +20,32 @@ export interface AdminModifierGroup {
   modifiers: AdminModifier[]
 }
 
+export interface RecipeItemInput {
+  ingredientId: string
+  quantity: number
+}
+
+export interface DayPriceInput {
+  weekday: number
+  pricePesos: number
+}
+
+export interface AdminAddon {
+  id: string
+  name: string
+  pricePesos: number
+  active: boolean
+  recipe: RecipeItemInput[]
+}
+
+export interface AdminIngredient {
+  id: string
+  name: string
+  unit: 'UNIT' | 'GRAM'
+  wastePercent: number
+  active: boolean
+}
+
 export interface AdminProduct {
   id: string
   categoryId?: string | null
@@ -31,6 +57,9 @@ export interface AdminProduct {
   sortOrder: number
   active: boolean
   saleDays?: number[]
+  addonIds: string[]
+  dayPrices: DayPriceInput[]
+  recipe: RecipeItemInput[]
   modifierGroupIds: string[]
   components: Array<{ productId: string; name: string; quantity: number }>
 }
@@ -39,6 +68,8 @@ export interface AdminSnapshot {
   version: number
   categories: AdminCategory[]
   products: AdminProduct[]
+  addons: AdminAddon[]
+  ingredients: AdminIngredient[]
   modifierGroups: AdminModifierGroup[]
 }
 
@@ -49,5 +80,9 @@ export interface ProductInput {
   costPesos: number
   active: boolean
   saleDays: number[]
-  modifierGroupIds: string[]
+  addonIds: string[]
+  dayPrices: DayPriceInput[]
+  recipe: RecipeItemInput[]
+  components: Array<{ productId: string; quantity: number }>
+  kind: 'PRODUCT' | 'COMBO'
 }
