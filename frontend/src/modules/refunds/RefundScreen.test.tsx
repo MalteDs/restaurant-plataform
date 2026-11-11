@@ -250,6 +250,15 @@ it('filtra por rangos rápidos y permite un rango personalizado', async () => {
   await waitFor(() => expect(screen.queryByText('ALM-HOY')).not.toBeInTheDocument())
 })
 
+it('conserva la semántica de tabla y una acción accesible por pedido', async () => {
+  const db = testDb()
+  await seedDetail(db)
+  renderScreen(db)
+
+  expect(await screen.findByRole('row', { name: /ALM-A-000001/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /ver alm-a-000001/i })).toBeInTheDocument()
+})
+
 it('filtra por estado', async () => {
   const db = testDb()
   await db.sales.put(order({ id: 'ok', displayCode: 'ALM-A-OK' }))
