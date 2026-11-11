@@ -212,6 +212,18 @@
 - Pendiente manual (no bloqueante): 500 ventas offline en el PC real Windows 10 de 2 GB, midiendo memoria de Edge.
 - Pendiente de decisión: la utilidad local offline no incluye gastos (no se guardan sin conexión); con red, Reportes usa el resumen del servidor.
 
+## Administración del catálogo (2026-11-11)
+
+- Adicionales globales por sede (`addons`), asignables a productos y combos, con cantidad 1+ en la venta y receta propia.
+- Días de venta con selección visual y precio especial por día (`product_day_prices`); el precio base sigue en `products.price_pesos`.
+- Combos editables con componentes y cantidades desde Administración.
+- Ingredientes y recetas de una línea para productos y adicionales (`ingredients`, `recipe_items`).
+- Reporte de consumo teórico con merma incluida y cobertura de recetas; advierte si la cobertura es menor al 80 %.
+- Migraciones nuevas: `026-catalog-addons`, `027-product-day-prices`, `028-ingredients-recipes`.
+- Compatibilidad: los payloads de sync con `modifiers` siguen funcionando; los grupos de modificadores quedan congelados para el historial y clientes anteriores.
+- Verificación automatizada: backend `./mvnw verify` → 176 pruebas, 0 fallos; frontend `npm test` → 159 pruebas, 0 fallos; `npm run build` correcto.
+- Pendiente manual: probar con datos reales el alta de adicionales, ingredientes, combo “Voz y Yo” con precio de lunes a jueves y el reporte de consumo. Revisar el resultado de `addons` si producción trae modificadores con nombres duplicados.
+
 ## Decisiones pendientes
 
 - Proveedor de nube (sujeto a cambios; no bloquea hasta la Tarea 15).
