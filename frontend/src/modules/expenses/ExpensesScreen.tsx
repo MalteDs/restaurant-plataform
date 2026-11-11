@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { useAuth } from '../../app/providers/AuthProvider'
 import { request } from '../../infrastructure/api/client'
 import { bogotaDate } from '../../shared/dates'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 
 interface Expense {
   id: string
@@ -155,7 +155,7 @@ export default function ExpensesScreen() {
                 onChange={(event) => setAmount(event.target.value)} required />
             </label>
             <Button className="w-full" type="submit">Guardar</Button>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <FormError>{error}</FormError>
           </form>
         </Card>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../infrastructure/api/client'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 
 interface AdminUser {
   id: string
@@ -108,7 +108,7 @@ export default function UsersScreen() {
               </select>
             </label>
             <Button className="w-full" type="submit">Crear usuario</Button>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <FormError>{error}</FormError>
           </form>
         </Card>
       </div>

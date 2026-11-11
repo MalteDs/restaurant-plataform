@@ -3,7 +3,7 @@ import { db, type CajaDb } from '../../infrastructure/database/schema'
 import { request } from '../../infrastructure/api/client'
 import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
 import { formatSaleDays } from '../sales/sale-days'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 import CategoryPanel from './CategoryPanel'
 import ModifierGroupPanel from './ModifierGroupPanel'
 import ProductForm from './ProductForm'
@@ -100,7 +100,7 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
       <PageHeader title="Catálogo" subtitle="Productos, categorías y modificadores" />
       {notice ? <p role="status" className="mb-3 text-sm text-green-700">{notice}</p> : null}
       {syncError ? <p role="status" className="mb-3 text-sm text-amber-700">{syncError}</p> : null}
-      {error ? <p role="alert" className="mb-3 text-sm text-red-600">{error}</p> : null}
+      <FormError className="mb-3">{error}</FormError>
 
       <div className={editing ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]' : ''}>
         <div className="space-y-4">
