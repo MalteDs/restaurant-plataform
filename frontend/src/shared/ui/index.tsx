@@ -33,6 +33,17 @@ export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInpu
 
 export { Modal } from './Modal'
 
+export function FormError({ children, id }: { children?: ReactNode; id?: string }) {
+  if (!children) {
+    return null
+  }
+  return (
+    <p id={id} role="alert" className="text-sm text-red-600">
+      {children}
+    </p>
+  )
+}
+
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <section className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm ${className}`}>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../providers/AuthProvider'
-import { Button, Card, Input } from '../../shared/ui'
+import { Button, Card, FormError, Input } from '../../shared/ui'
 
 export default function LockScreen() {
   const { user, unlock } = useAuth()
@@ -43,7 +43,7 @@ export default function LockScreen() {
               required
             />
           </label>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <FormError>{error}</FormError>
           <Button className="w-full" type="submit">
             Desbloquear
           </Button>

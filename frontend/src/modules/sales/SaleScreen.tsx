@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductRow } from '../../infrastructure/database/schema'
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { useAuth } from '../../app/providers/AuthProvider'
-import { Button, Card, Input, Modal, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, Modal, PageHeader } from '../../shared/ui'
 import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
@@ -629,8 +629,8 @@ export default function SaleScreen({
                     </p>
                   </div>
                 ) : null}
-                {printError ? <p className="text-sm text-red-600">{printError}</p> : null}
-                {error ? <p className="text-sm text-red-600">{error}</p> : null}
+                <FormError>{printError}</FormError>
+                <FormError>{error}</FormError>
               </div>
             </Card>
           </div>
@@ -654,7 +654,7 @@ export default function SaleScreen({
               <Input className="mt-1" maxLength={200} value={priceReason}
                 onChange={(event) => setPriceReason(event.target.value)} />
             </label>
-            {priceError ? <p className="text-sm text-red-600">{priceError}</p> : null}
+            <FormError>{priceError}</FormError>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setPriceLine(null)}>Cancelar</Button>
               <Button onClick={savePrice}>Guardar precio</Button>

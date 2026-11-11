@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 
 interface Device {
   id: string
@@ -107,7 +107,7 @@ export default function DevicesScreen() {
               Token (guárdalo, no se vuelve a mostrar): {token}
             </p>
           ) : null}
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          <FormError>{error}</FormError>
         </Card>
       </div>
     </div>

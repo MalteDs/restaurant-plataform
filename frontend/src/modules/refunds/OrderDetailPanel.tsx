@@ -9,7 +9,7 @@ import {
   saleTypeLabel,
   type ReceiptData
 } from '../printing/receipt'
-import { Button, Card, Input } from '../../shared/ui'
+import { Button, Card, FormError, Input } from '../../shared/ui'
 
 interface OrderDetailPanelProps {
   database?: CajaDb
@@ -117,7 +117,7 @@ export default function OrderDetailPanel({
   if (loadError) {
     return (
       <Card>
-        <p className="text-sm text-red-600">{loadError}</p>
+        <FormError>{loadError}</FormError>
       </Card>
     )
   }
@@ -260,8 +260,8 @@ export default function OrderDetailPanel({
         ) : null}
 
         {message ? <p className="text-sm text-green-700">{message}</p> : null}
-        {printError ? <p className="text-sm text-red-600">{printError}</p> : null}
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        <FormError>{printError}</FormError>
+        <FormError>{error}</FormError>
       </div>
     </Card>
   )

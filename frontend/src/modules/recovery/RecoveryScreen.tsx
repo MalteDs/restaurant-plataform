@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db } from '../../infrastructure/database/schema'
 import { chooseExportFolder, exportPending, exportToFolder, startAutoExport } from '../../infrastructure/recovery/export'
 import { importPending } from '../../infrastructure/recovery/import'
-import { Button, Card, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, PageHeader } from '../../shared/ui'
 
 export default function RecoveryScreen() {
   const [pending, setPending] = useState(0)
@@ -100,7 +100,7 @@ export default function RecoveryScreen() {
           />
         </div>
         {message ? <p className="text-sm text-green-700">{message}</p> : null}
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        <FormError>{error}</FormError>
       </Card>
     </div>
   )
