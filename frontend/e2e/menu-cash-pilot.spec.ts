@@ -44,5 +44,5 @@ test('la caja muestra el resumen y confirma el cierre', async ({ page }) => {
   await page.getByRole('link', { name: /^caja$/i }).click()
   await expect(page.getByTestId('shift-summary')).toContainText(/ventas efectivo/i)
   await closeShift(page, { 50000: 1, 5000: 1, 2000: 1 })
-  await expect(page.getByText(/turno cerrado/i)).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: /^turno cerrado$/i })).toBeVisible()
 })

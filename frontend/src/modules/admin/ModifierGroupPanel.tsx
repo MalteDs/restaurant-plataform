@@ -91,16 +91,21 @@ export default function ModifierGroupPanel({ groups, onChanged }: Props) {
         method: 'POST',
         body: JSON.stringify({ name: trimmed, minSelection: min, maxSelection: max, modifiers })
       })
-      setName('')
-      setMinSelection('0')
-      setMaxSelection('1')
-      setOptions([newOption()])
-      setNotice('Grupo creado')
-      await onChanged()
     } catch {
       setError('No se pudo crear el grupo')
-    } finally {
       setSaving(false)
+      return
+    }
+    setName('')
+    setMinSelection('0')
+    setMaxSelection('1')
+    setOptions([newOption()])
+    setNotice('Grupo creado')
+    setSaving(false)
+    try {
+      await onChanged()
+    } catch {
+      setError('Grupo creado, pero no se pudo recargar la lista')
     }
   }
 
@@ -122,13 +127,18 @@ export default function ModifierGroupPanel({ groups, onChanged }: Props) {
         method: 'PUT',
         body: JSON.stringify({ name: trimmed, active: editActive })
       })
-      setEditing(null)
-      setNotice('Grupo actualizado')
-      await onChanged()
     } catch {
       setError('No se pudo guardar el grupo')
-    } finally {
       setSaving(false)
+      return
+    }
+    setEditing(null)
+    setNotice('Grupo actualizado')
+    setSaving(false)
+    try {
+      await onChanged()
+    } catch {
+      setError('Grupo actualizado, pero no se pudo recargar la lista')
     }
   }
 

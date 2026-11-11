@@ -118,6 +118,48 @@ it('crea un producto, refresca y sincroniza el catálogo local', async () => {
   await waitFor(() => expect(syncCatalog).toHaveBeenCalledWith(database))
 })
 
+it('reactiva un producto inactivo', async () => {
+  mockAdminSnapshot({
+    products: [product({ id: 'p1', name: 'PRODUCTO VIEJO', active: false })],
+    categories: [category({ id: 'c1', name: 'HAMBURGUESAS' })]
+  })
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  const products = await screen.findByRole('table')
+  await userEvent.click(within(products).getByRole('button', { name: /editar/i }))
+  const active = screen.getByLabelText(/^activo$/i)
+  expect(active).not.toBeChecked()
+  await userEvent.click(active)
+  await userEvent.click(screen.getByRole('button', { name: /guardar producto/i }))
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/catalog/products/p1',
+    expect.objectContaining({ method: 'PUT' })))
+  const call = vi.mocked(request).mock.calls.find(
+    ([path, init]) => path === '/api/catalog/products/p1' && init?.method === 'PUT'
+  )
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ active: true })
+})
+
+it('avisa si no puede sincronizar la caja local después de guardar', async () => {
+  mockAdminSnapshot({
+    products: [],
+    categories: [category({ id: 'c1', name: 'HAMBURGUESAS' })]
+  })
+  vi.mocked(syncCatalog).mockRejectedValueOnce(new Error('sin red'))
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: /nuevo producto/i }))
+  await userEvent.type(screen.getByLabelText(/^nombre$/i), 'PRODUCTO NUEVO')
+  await userEvent.selectOptions(screen.getByLabelText(/^categoría$/i), 'c1')
+  await userEvent.type(screen.getByLabelText(/^precio$/i), '12300')
+  await userEvent.click(screen.getByRole('button', { name: /guardar producto/i }))
+
+  expect(await screen.findByText(/producto guardado/i)).toBeInTheDocument()
+  expect(await screen.findByText(/caja local/i)).toBeInTheDocument()
+})
+
 it('edita nombre, precio y costo de un producto', async () => {
   mockAdminSnapshot({
     products: [product({ id: 'p1', name: 'SENCILLA', pricePesos: 16500 })],

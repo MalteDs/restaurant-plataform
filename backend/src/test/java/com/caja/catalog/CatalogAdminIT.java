@@ -63,6 +63,15 @@ class CatalogAdminIT {
     assertFalse(publicGroupNames().contains("GRUPO INACTIVO"));
   }
 
+  @Test void reactivatesProductForSaleSnapshot() throws Exception {
+    var productId = createProduct("PRODUCTO REACTIVABLE", 10000);
+    updateProductActive(productId, false);
+    assertFalse(publicProductNames().contains("PRODUCTO REACTIVABLE"));
+
+    updateProductActive(productId, true);
+    assertTrue(publicProductNames().contains("PRODUCTO REACTIVABLE"));
+  }
+
   @Test void assignsAndClearsModifierGroupsOnProduct() throws Exception {
     var groupId = createModifierGroup("GRUPO ASIGNABLE");
     var productId = createProductWithGroups("PRODUCTO CON GRUPO", List.of(groupId));
@@ -122,9 +131,13 @@ class CatalogAdminIT {
   }
 
   private void deactivateProduct(UUID id) throws Exception {
+    updateProductActive(id, false);
+  }
+
+  private void updateProductActive(UUID id, boolean active) throws Exception {
     mvc.perform(put("/api/catalog/products/" + id).contentType(MediaType.APPLICATION_JSON)
             .header("Authorization", "Bearer " + adminToken())
-            .content(json.writeValueAsString(Map.of("active", false))))
+            .content(json.writeValueAsString(Map.of("active", active))))
         .andExpect(status().isNoContent());
   }
 

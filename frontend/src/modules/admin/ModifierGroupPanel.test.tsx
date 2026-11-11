@@ -35,6 +35,21 @@ it('crea un grupo con opciones y precios adicionales', async () => {
   await waitFor(() => expect(onChanged).toHaveBeenCalled())
 })
 
+it('mantiene el éxito si falla la recarga posterior', async () => {
+  vi.mocked(request).mockResolvedValue({} as never)
+  const onChanged = vi.fn().mockRejectedValueOnce(new Error('sin red'))
+  render(<ModifierGroupPanel groups={[]} onChanged={onChanged} />)
+
+  await userEvent.type(screen.getByLabelText(/nombre del grupo/i), 'EXTRAS')
+  await userEvent.type(screen.getByLabelText(/^opción 1$/i), 'Queso')
+  await userEvent.type(screen.getByLabelText(/^precio adicional 1$/i), '2000')
+  await userEvent.click(screen.getByRole('button', { name: /crear grupo/i }))
+
+  expect(await screen.findByText(/^grupo creado$/i)).toBeInTheDocument()
+  expect(await screen.findByText(/no se pudo recargar/i)).toBeInTheDocument()
+  expect(screen.queryByText(/no se pudo crear el grupo/i)).not.toBeInTheDocument()
+})
+
 it('edita el nombre y el activo de un grupo', async () => {
   vi.mocked(request).mockResolvedValue({} as never)
   const onChanged = vi.fn().mockResolvedValue(undefined)

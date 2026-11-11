@@ -29,6 +29,20 @@ it('crea una categoría con nombre y orden', async () => {
   await waitFor(() => expect(onChanged).toHaveBeenCalled())
 })
 
+it('mantiene el éxito si falla la recarga posterior', async () => {
+  vi.mocked(request).mockResolvedValue({} as never)
+  const onChanged = vi.fn().mockRejectedValueOnce(new Error('sin red'))
+  render(<CategoryPanel categories={[]} onChanged={onChanged} />)
+
+  await userEvent.type(screen.getByLabelText(/nueva categoría/i), 'POSTRES')
+  await userEvent.type(screen.getByLabelText(/orden/i), '3')
+  await userEvent.click(screen.getByRole('button', { name: /agregar categoría/i }))
+
+  expect(await screen.findByText(/^categoría agregada$/i)).toBeInTheDocument()
+  expect(await screen.findByText(/no se pudo recargar/i)).toBeInTheDocument()
+  expect(screen.queryByText(/no se pudo agregar la categoría/i)).not.toBeInTheDocument()
+})
+
 it('edita nombre, orden y activo de una categoría', async () => {
   vi.mocked(request).mockResolvedValue({} as never)
   const onChanged = vi.fn().mockResolvedValue(undefined)

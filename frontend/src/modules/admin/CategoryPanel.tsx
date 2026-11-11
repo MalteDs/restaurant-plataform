@@ -49,14 +49,19 @@ export default function CategoryPanel({ categories, onChanged }: Props) {
         method: 'POST',
         body: JSON.stringify({ name: trimmed, sortOrder: order })
       })
-      setName('')
-      setSortOrder('0')
-      setNotice('Categoría agregada')
-      await onChanged()
     } catch {
       setError('No se pudo agregar la categoría')
-    } finally {
       setSaving(false)
+      return
+    }
+    setName('')
+    setSortOrder('0')
+    setNotice('Categoría agregada')
+    setSaving(false)
+    try {
+      await onChanged()
+    } catch {
+      setError('Categoría agregada, pero no se pudo recargar la lista')
     }
   }
 
@@ -83,13 +88,18 @@ export default function CategoryPanel({ categories, onChanged }: Props) {
         method: 'PUT',
         body: JSON.stringify({ name: trimmed, sortOrder: order, active: editActive })
       })
-      setEditing(null)
-      setNotice('Categoría actualizada')
-      await onChanged()
     } catch {
       setError('No se pudo guardar la categoría')
-    } finally {
       setSaving(false)
+      return
+    }
+    setEditing(null)
+    setNotice('Categoría actualizada')
+    setSaving(false)
+    try {
+      await onChanged()
+    } catch {
+      setError('Categoría actualizada, pero no se pudo recargar la lista')
     }
   }
 
