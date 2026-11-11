@@ -28,9 +28,16 @@ const snapshot = {
       sortOrder: 1,
       active: true,
       modifierGroupIds: [],
-      components: []
+      components: [],
+      addonIds: ['a1'],
+      dayPrices: [{ weekday: 1, pricePesos: 15000 }],
+      recipe: []
     }
   ],
+  addons: [
+    { id: 'a1', name: 'Tocineta', pricePesos: 5000, active: true, recipe: [] }
+  ],
+  ingredients: [],
   modifierGroups: []
 }
 
@@ -64,4 +71,31 @@ it('sincroniza el catalogo y no reescribe si la version no cambio', async () => 
   // The same version must not clear or duplicate the local catalog.
   expect(await db.products.get('local')).toBeDefined()
   expect(await db.products.count()).toBe(2)
+})
+
+it('guarda adicionales y precios por dia en la caja local', async () => {
+  const db = openDb(`test-catalog-addons-${crypto.randomUUID()}`)
+  opened.push(db)
+
+  await syncCatalog(db, async () => snapshot)
+
+  expect(await db.addons.count()).toBe(1)
+  expect((await db.products.get('p1'))?.addonIds).toEqual(['a1'])
+  expect((await db.products.get('p1'))?.dayPrices).toEqual([{ weekday: 1, pricePesos: 15000 }])
+})
+
+it('acepta un snapshot viejo sin adicionales', async () => {
+  const db = openDb(`test-catalog-legacy-${crypto.randomUUID()}`)
+  opened.push(db)
+  const legacy = {
+    ...snapshot,
+    addons: undefined,
+    products: snapshot.products.map(({ addonIds, dayPrices, recipe, ...product }) => product)
+  }
+
+  await syncCatalog(db, async () => legacy as never)
+
+  expect(await db.addons.count()).toBe(0)
+  expect((await db.products.get('p1'))?.addonIds).toEqual([])
+  expect((await db.products.get('p1'))?.dayPrices).toEqual([])
 })

@@ -16,6 +16,39 @@ export interface ComponentRow {
   quantity: number
 }
 
+export interface DayPriceRow {
+  weekday: number
+  pricePesos: number
+}
+
+export interface RecipeItemRow {
+  ingredientId: string
+  quantity: number
+}
+
+export interface IngredientRow {
+  id: string
+  name: string
+  unit: 'UNIT' | 'GRAM'
+  wastePercent: number
+  active: boolean
+}
+
+export interface AddonRow {
+  id: string
+  name: string
+  pricePesos: number
+  active?: boolean
+  recipe?: RecipeItemRow[]
+}
+
+export interface SaleAddonRow {
+  id: string
+  name: string
+  pricePesos: number
+  quantity: number
+}
+
 export interface ProductRow {
   id: string
   tenantId?: string
@@ -31,6 +64,9 @@ export interface ProductRow {
   modifierGroupIds: string[]
   components: ComponentRow[]
   saleDays?: number[]
+  addonIds?: string[]
+  dayPrices?: DayPriceRow[]
+  recipe?: RecipeItemRow[]
 }
 
 export interface ModifierRow {
@@ -76,7 +112,9 @@ export interface SaleItemRow {
   lineTotalPesos: number
   note?: string | null
   lineNumber?: number
-  modifiers: ModifierRow[]
+  addons?: SaleAddonRow[]
+  /** Ventas anteriores a los adicionales. */
+  modifiers?: ModifierRow[]
   components: ComponentRow[]
   catalogUnitPricePesos?: number
   overrideReason?: string | null
@@ -172,6 +210,7 @@ export class CajaDb extends Dexie {
   products!: Table<ProductRow, string>
   categories!: Table<CategoryRow, string>
   modifierGroups!: Table<ModifierGroupRow, string>
+  addons!: Table<AddonRow, string>
   sales!: Table<SaleRow, string>
   saleItems!: Table<SaleItemRow, string>
   payments!: Table<PaymentRow, string>
@@ -209,6 +248,9 @@ export class CajaDb extends Dexie {
       expenseCategories: 'name, sortOrder'
     }).upgrade(async (tx) => {
       await tx.table('expenseCategories').bulkPut(DEFAULT_EXPENSE_CATEGORIES)
+    })
+    this.version(5).stores({
+      addons: 'id'
     })
     this.on('populate', async (tx) => {
       await tx.table('expenseCategories').bulkPut(DEFAULT_EXPENSE_CATEGORIES)

@@ -1,4 +1,4 @@
-import type { CajaDb } from '../../../infrastructure/database/schema'
+import type { CajaDb, RecipeItemRow } from '../../../infrastructure/database/schema'
 import { request } from '../../../infrastructure/api/client'
 
 export interface CatalogSnapshotPayload {
@@ -16,11 +16,28 @@ export interface CatalogSnapshotPayload {
     costPesos: number | null
     sortOrder: number
     active: boolean
-    modifierGroupIds: string[]
+    modifierGroupIds?: string[]
     components: Array<{ productId: string; name: string; quantity: number }>
     saleDays?: number[]
+    addonIds?: string[]
+    dayPrices?: Array<{ weekday: number; pricePesos: number }>
+    recipe?: RecipeItemRow[]
   }>
-  modifierGroups: Array<{
+  addons?: Array<{
+    id: string
+    name: string
+    pricePesos: number
+    active?: boolean
+    recipe?: RecipeItemRow[]
+  }>
+  ingredients?: Array<{
+    id: string
+    name: string
+    unit: 'UNIT' | 'GRAM'
+    wastePercent: number
+    active: boolean
+  }>
+  modifierGroups?: Array<{
     id: string
     name: string
     minSelection: number
@@ -43,19 +60,28 @@ export async function syncCatalog(
     return localVersion
   }
 
+  const products = remote.products.map((product) => ({
+    ...product,
+    addonIds: product.addonIds ?? [],
+    dayPrices: product.dayPrices ?? [],
+    recipe: product.recipe ?? []
+  }))
+
   await database.transaction(
     'rw',
     database.products,
     database.categories,
     database.modifierGroups,
+    database.addons,
     database.meta,
     async () => {
       await database.products.clear()
       await database.categories.clear()
       await database.modifierGroups.clear()
+      await database.addons.clear()
       await database.categories.bulkPut(remote.categories)
-      await database.products.bulkPut(remote.products)
-      await database.modifierGroups.bulkPut(remote.modifierGroups)
+      await database.products.bulkPut(products)
+      await database.addons.bulkPut(remote.addons ?? [])
       await database.meta.put({ key: 'catalogVersion', value: remote.version })
     }
   )
