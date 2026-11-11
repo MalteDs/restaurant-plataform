@@ -48,11 +48,12 @@
 
 ## Devolver
 
-1. En **Pedidos**, busca la venta y toca **Devolver**.
-2. Escribe el motivo (obligatorio), elige el **Medio de devolución** y confirma.
-3. La devolución es por el total de la venta y queda en el turno abierto actual.
-4. Si devuelves en efectivo, el efectivo esperado del turno baja por el total; si devuelves por tarjeta o Bre-B, no afecta el arqueo.
-5. Funciona sin conexión; se sincroniza después.
+1. En **Pedidos**, elige **Hoy**, **7 días**, **Mes**, **Año**, **Todo** o un rango **Desde/Hasta**; busca el código y toca la fila.
+2. En el detalle, verifica ítems, pagos y total; usa **Imprimir comprobante** si hace falta.
+3. Toca **Devolver**, escribe un motivo de 5 a 200 caracteres, elige el medio y confirma.
+4. La devolución es por el total de la venta y queda en el turno abierto actual.
+5. Si devuelves en efectivo, el efectivo esperado del turno baja por el total; si devuelves por tarjeta o Bre-B, no afecta el arqueo.
+6. Funciona sin conexión; se sincroniza después.
 
 ## Cerrar el turno
 

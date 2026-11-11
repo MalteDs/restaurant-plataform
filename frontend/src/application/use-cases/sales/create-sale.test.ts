@@ -144,3 +144,15 @@ it('rechaza pagos que no suman el total', async () => {
   })).rejects.toThrow(/suman|total/i)
   expect(await db.sales.count()).toBe(0)
 })
+
+it('guarda nota y orden de línea para el comprobante', async () => {
+  const db = await seed()
+  const input = baseInput()
+  input.items[0].note = 'Sin cebolla'
+
+  const out = await createSale(db, input)
+  const stored = await db.saleItems.where('saleId').equals(out.saleId).first()
+
+  expect(stored?.note).toBe('Sin cebolla')
+  expect(stored?.lineNumber).toBe(1)
+})

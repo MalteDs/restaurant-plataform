@@ -115,6 +115,11 @@ public class ShiftApplicationService {
 
   @Transactional
   public Refund applyRefund(RefundCommand command) {
+    var reason = command.reason() == null ? "" : command.reason().trim();
+    if (reason.length() < 5 || reason.length() > 200) {
+      throw new IllegalArgumentException(
+          "El motivo de la devolución debe tener entre 5 y 200 caracteres");
+    }
     requireOpenShift(command);
     var saleTotal = jdbc.query("""
         select total_pesos from sales
@@ -135,7 +140,7 @@ public class ShiftApplicationService {
                             reason, amount_pesos, method, operational_date)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::payment_method, ?)
         """, refundId, command.tenantId(), command.locationId(), command.saleId(),
-        command.shiftId(), command.deviceId(), command.userId(), command.reason(), saleTotal,
+        command.shiftId(), command.deviceId(), command.userId(), reason, saleTotal,
         command.method(), command.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate());
     jdbc.update("update sales set status = 'REFUNDED' where id = ? and tenant_id = ? and location_id = ?",
         command.saleId(), command.tenantId(), command.locationId());
@@ -143,7 +148,7 @@ public class ShiftApplicationService {
         command.saleId(), command.tenantId(), command.locationId());
     audit.record(command.tenantId(), command.locationId(), command.userId(), "REFUND_CREATED",
         "sale", command.saleId(),
-        java.util.Map.of("amountPesos", saleTotal, "reason", command.reason()));
+        java.util.Map.of("amountPesos", saleTotal, "reason", reason));
     return new Refund(refundId, command.saleId(), saleTotal, command.method());
   }
 

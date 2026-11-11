@@ -3,27 +3,35 @@ import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductR
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { useAuth } from '../../app/providers/AuthProvider'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
+import { printReceipt } from '../printing/receipt'
 
 type PaymentMethod = SaleInput['payments'][number]['method']
 
-interface CartLine {
-  key: string
-  product: ProductRow
-  quantity: number
-  unitPricePesos: number
-  catalogUnitPricePesos: number
-  overrideReason: string | null
-  modifiers: ModifierRow[]
+function normalizeSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase('es-CO')
+}
+
+function categorySectionId(category: string): string {
+  return `category-${normalizeSearch(category).replace(/[^a-z0-9]+/g, '-')}`
 }
 
 interface SaleScreenProps {
   database?: CajaDb
   onCreateSale?: (input: SaleInput) => Promise<CreatedSale>
+  onPrint?: (saleId: string) => Promise<void>
 }
 
-export default function SaleScreen({ database = db, onCreateSale }: SaleScreenProps) {
+export default function SaleScreen({
+  database = db,
+  onCreateSale,
+  onPrint
+}: SaleScreenProps) {
   const { user } = useAuth()
   const canOverride = user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const [products, setProducts] = useState<ProductRow[]>([])
@@ -49,11 +57,14 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const [priceReason, setPriceReason] = useState('')
   const [priceError, setPriceError] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState('')
+  const [lastSale, setLastSale] = useState<CreatedSale | null>(null)
+  const [printError, setPrintError] = useState('')
   const [error, setError] = useState('')
   const [now, setNow] = useState(new Date())
   const lastCharge = useRef(0)
+  const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void database.products.toArray().then((rows) => setProducts(rows.filter((row) => row.active)))
@@ -77,6 +88,19 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     return [...byCategory.entries()]
   }, [products, now])
 
+  const visibleGroups = useMemo(() => {
+    const needle = normalizeSearch(query.trim())
+    if (!needle) {
+      return grouped
+    }
+    return grouped
+      .map(([category, families]) => [
+        category,
+        families.filter((family) => normalizeSearch(family.name).includes(needle))
+      ] as const)
+      .filter(([, families]) => families.length > 0)
+  }, [grouped, query])
+
   const cartUnits = cart.reduce((sum, line) => sum + line.quantity, 0)
 
   const total = cart.reduce((sum, line) => sum + lineTotal({
@@ -93,18 +117,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
   const remaining = total - parts.reduce((sum, part) => sum + part.amountPesos, 0)
 
   function addLine(product: ProductRow, modifiers: ModifierRow[]) {
-    setCart((current) => [
-      ...current,
-      {
-        key: crypto.randomUUID(),
-        product,
-        quantity: 1,
-        unitPricePesos: product.pricePesos,
-        catalogUnitPricePesos: product.pricePesos,
-        overrideReason: null,
-        modifiers
-      }
-    ])
+    setCart((current) => addToCart(current, product, modifiers))
   }
 
   function pick(product: ProductRow) {
@@ -239,6 +252,15 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     setParts((current) => current.filter((part) => part.key !== key))
   }
 
+  async function runPrint(saleId: string) {
+    setPrintError('')
+    try {
+      await (onPrint ?? ((id: string) => printReceipt(database, id)))(saleId)
+    } catch {
+      setPrintError('No se pudo imprimir. La venta quedó guardada.')
+    }
+  }
+
   async function onCharge() {
     const now = Date.now()
     if (submitting || now - lastCharge.current < 500 || cart.length === 0) {
@@ -246,7 +268,7 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     }
     lastCharge.current = now
     setError('')
-    setMessage('')
+    setPrintError('')
     if (type === 'DINE_IN' && !tableLabel.trim()) {
       setError('La mesa necesita una etiqueta')
       return
@@ -283,7 +305,8 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
       setCartOpen(false)
       setSplitMode(false)
       setParts([])
-      setMessage(`Venta ${created.displayCode} guardada`)
+      setLastSale(created)
+      void runPrint(created.saleId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo cobrar')
     } finally {
@@ -295,46 +318,99 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
     ? groups.filter((group) => picking.modifierGroupIds.includes(group.id))
     : []
 
+  function scrollToCategory(category: string) {
+    if (query.trim() !== '') {
+      setQuery('')
+      window.requestAnimationFrame(() => scrollToCategory(category))
+      return
+    }
+    const target = document.getElementById(categorySectionId(category))
+    if (!target) {
+      return
+    }
+    const headerHeight = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--header-height')
+    ) || 0
+    const toolbarHeight = toolbarRef.current?.offsetHeight ?? 0
+    window.scrollTo({
+      top: target.getBoundingClientRect().top + window.scrollY - headerHeight - toolbarHeight - 16,
+      behavior: 'smooth'
+    })
+  }
+
   return (
     <div className="pb-24 lg:pb-0">
       <PageHeader title="Venta" subtitle="Precios congelados del catálogo local" />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <div className="space-y-4">
-            {grouped.map(([category, families]) => (
-              <section key={category}>
-                <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+        <div className="space-y-4">
+          <div
+            ref={toolbarRef}
+            className="sticky top-[var(--header-height)] z-30 space-y-2 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur"
+          >
+            <Input
+              aria-label="Buscar producto"
+              placeholder="Buscar producto…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              {grouped.map(([category]) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => scrollToCategory(category)}
+                  className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-500"
+                >
                   {category}
-                </h2>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {families.map((family) => {
-                    const price = family.variants[0]?.product.pricePesos ?? 0
-                    return (
-                      <button
-                        key={family.key}
-                        type="button"
-                        onClick={() => pickFamily(family)}
-                        className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
-                      >
-                        <span className="block text-sm font-semibold text-gray-900">
-                          {family.name}
-                        </span>
-                        <span className="text-sm text-brand-600">
-                          {family.variants.length > 1
-                            ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
-                            : `$${price.toLocaleString('es-CO')}`}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-        </Card>
+          <Card>
+            <div className="space-y-4">
+              {visibleGroups.length === 0 ? (
+                <p className="text-sm text-gray-500">Sin productos para esa búsqueda.</p>
+              ) : null}
+              {visibleGroups.map(([category, families]) => (
+                <section key={category} id={categorySectionId(category)}>
+                  <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+                    {category}
+                  </h2>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                    {families.map((family) => {
+                      const price = family.variants[0]?.product.pricePesos ?? 0
+                      return (
+                        <button
+                          key={family.key}
+                          type="button"
+                          onClick={() => pickFamily(family)}
+                          className="flex min-h-[76px] flex-col justify-between rounded-xl border border-gray-200 p-3 text-left transition hover:border-brand-500 hover:shadow-sm active:scale-[0.99]"
+                        >
+                          <span className="block text-sm font-semibold text-gray-900">
+                            {family.name}
+                          </span>
+                          <span className="mt-1 flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium text-brand-600">
+                              {family.variants.length > 1
+                                ? `Desde $${price.toLocaleString('es-CO')} · ${family.variants.length} opciones`
+                                : `$${price.toLocaleString('es-CO')}`}
+                            </span>
+                            <span aria-hidden className="text-lg font-bold leading-none text-brand-600">
+                              +
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </Card>
+        </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-20 lg:z-auto lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-[calc(var(--header-height)+1rem)] lg:z-auto lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <button
             type="button"
             className="flex w-full items-center justify-between rounded-lg bg-gray-900 px-4 py-3 text-sm font-semibold text-white lg:hidden"
@@ -366,6 +442,11 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                         <p className="truncate text-sm font-medium text-gray-900">
                           {line.product.name}
                         </p>
+                        {line.modifiers.length > 0 ? (
+                          <p className="text-xs text-gray-500">
+                            {line.modifiers.map((modifier) => modifier.name).join(' · ')}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-gray-500">
                           ${(line.unitPricePesos
                             + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
@@ -531,7 +612,24 @@ export default function SaleScreen({ database = db, onCreateSale }: SaleScreenPr
                   disabled={submitting || cart.length === 0 || (splitMode && remaining !== 0)}>
                   {submitting ? 'Guardando…' : 'Cobrar'}
                 </Button>
-                {message ? <p className="text-sm text-green-700">{message}</p> : null}
+                {lastSale ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <p className="text-sm font-medium text-green-800">
+                      Venta {lastSale.displayCode} guardada
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="mt-2 w-full"
+                      onClick={() => void runPrint(lastSale.saleId)}
+                    >
+                      Imprimir comprobante
+                    </Button>
+                    <p className="mt-1 text-xs text-gray-600">
+                      Si la tirilla no salió, puedes imprimirla de nuevo.
+                    </p>
+                  </div>
+                ) : null}
+                {printError ? <p className="text-sm text-red-600">{printError}</p> : null}
                 {error ? <p className="text-sm text-red-600">{error}</p> : null}
               </div>
             </Card>

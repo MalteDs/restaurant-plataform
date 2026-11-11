@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-10
-**Fase:** v1 + mejoras de operación + operación de caja implementadas.
+**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos + operación de caja implementados; prueba física pendiente.
 **Tarea en curso:** ninguna.
-**Último commit de implementación:** ver `git log -1`.
+**Último commit de implementación:** ver `git log -1` (detalle de pedidos).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
 **Bloqueos:** ninguno.
 
@@ -55,7 +55,52 @@
 - Reportes del día: la pantalla usa las ventas locales de este dispositivo y completa gastos y desglose de gastos desde el servidor. La agregación en línea de varios dispositivos no forma parte de esta iteración.
 - Pendiente previo que sigue abierto: el alta de productos/combos desde la interfaz no existe; los nuevos se crean por la API documentada. Los combos promocionales se pueden editar en Catálogo.
 
-## Caja: movimientos## Caja: movimientos, gastos y cierre (2026-11-10)
+## Impresión de comprobante (2026-11-10)
+
+- [x] Tarea 1 — Datos y HTML del comprobante
+- [x] Tarea 2 — Impresión automática y botón en Venta
+- [x] Tarea 3 — Reimpresión desde Pedidos
+- [x] Tarea 4 — Verificación automatizada y documentación
+- [ ] Prueba manual en la impresora térmica del local
+
+### Verificación
+
+- Frontend: `npm test` → 74 pruebas, 0 fallos.
+- `npm run build` correcto.
+- E2E no aplica: el diálogo de impresión del navegador no se automatiza.
+
+### Notas de la iteración
+
+- La impresión usa un iframe oculto y `window.print()`: sin dependencias nuevas ni cambios de backend.
+- Se imprime automáticamente al cobrar y queda el botón `Imprimir comprobante`; también se reimprime desde Pedidos.
+- Si falla la apertura de impresión, la venta queda guardada y se muestra `No se pudo imprimir. La venta quedó guardada.`. El navegador no confirma si el papel salió; por eso el panel siempre recuerda que se puede reimprimir.
+- El comprobante es interno: dice `Comprobante de venta`, sin NIT ni datos DIAN.
+- El ancho es fluido para 58 u 80 mm. Falta probarlo en la térmica real; si el texto se corta, ajustar el CSS de `receipt.ts`.
+- Pendiente manual: identificar el modelo de la impresora y registrar el resultado de la prueba física.
+
+## Pedidos: detalle y devolución segura (2026-11-10)
+
+- [x] Tarea 1 — Motivo de devolución de 5 a 200 caracteres en el caso de uso local
+- [x] Tarea 2 — Misma validación en backend y sincronización
+- [x] Tarea 3 — Panel de detalle con reimpresión y devolución segura
+- [x] Tarea 4 — Filtros por día, estado y código, resumen y paginación
+- [x] Tarea 5 — Documentación y verificación completa
+
+### Verificación
+
+- Frontend: `npm test` → 91 pruebas, 0 fallos; `npm run build` correcto.
+- Backend: `./mvnw verify` → pruebas sin fallos, incluida la nueva validación de motivo.
+- Pruebas nuevas: helper de filtros, detalle con ítems/modificadores/pagos, devolución solo desde el detalle, motivo corto rechazado y paginación de 50.
+
+### Notas de la iteración
+
+- La lista de Pedidos abre el detalle al tocar cualquier fila; **Imprimir comprobante** y **Devolver** viven en el detalle.
+- La devolución es un segundo paso dentro del detalle: motivo de 5 a 200 caracteres, medio y confirmación.
+- Filtros: **Hoy** por defecto, **7 días**, **Mes**, **Año**, **Todo** o rango **Desde/Hasta**, más estado y búsqueda por código; **Cargar más** de 50 en 50.
+- La venta devuelta muestra monto, medio, motivo y fecha, y ya no permite devolver otra vez.
+- Sin cambios de API ni dependencias nuevas; todo sigue offline con IndexedDB.
+
+## Caja: movimientos, gastos y cierre (2026-11-10)
 
 - [x] Tarea 1 — Esquema de caja y lectura de categorías
 - [x] Tarea 2 — Movimiento de efectivo y gasto de caja

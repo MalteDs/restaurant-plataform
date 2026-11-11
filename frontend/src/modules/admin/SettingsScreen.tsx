@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../infrastructure/api/client'
+import { db } from '../../infrastructure/database/schema'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
 
 interface Location {
@@ -33,6 +34,7 @@ export default function SettingsScreen() {
     setLocation(current)
     setName(current.name)
     setCode(current.code)
+    await db.meta.put({ key: 'locationName', value: current.name })
   }
 
   async function refreshCategories() {

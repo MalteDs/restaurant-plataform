@@ -72,6 +72,8 @@ export interface SaleItemRow {
   unitPricePesos: number
   costPesos: number | null
   lineTotalPesos: number
+  note?: string | null
+  lineNumber?: number
   modifiers: ModifierRow[]
   components: ComponentRow[]
   catalogUnitPricePesos?: number
