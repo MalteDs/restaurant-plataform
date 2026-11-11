@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../infrastructure/api/client'
 import { formatSaleDays, parseSaleDaysInput } from '../sales/sale-days'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 
 interface Product {
   id: string
@@ -102,7 +102,7 @@ export default function CatalogScreen() {
         <p className="mt-3 text-xs text-gray-500">
           Días: 1=lunes … 7=domingo, separados por coma; vacío=todos.
         </p>
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+        <FormError className="mt-3">{error}</FormError>
       </Card>
     </div>
   )

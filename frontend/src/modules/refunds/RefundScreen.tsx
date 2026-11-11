@@ -131,19 +131,21 @@ export default function RefundScreen({ database = db, onPrint }: RefundScreenPro
               </thead>
               <tbody>
                 {visible.map((sale) => (
-                  <tr key={sale.id} role="button" tabIndex={0}
-                    aria-label={`Ver ${sale.displayCode}`}
+                  <tr key={sale.id}
                     onClick={() => setSelectedId(sale.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setSelectedId(sale.id)
-                      }
-                    }}
-                    className={`cursor-pointer border-t border-gray-100 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                    className={`cursor-pointer border-t border-gray-100 hover:bg-gray-50 ${
                       selectedId === sale.id ? 'bg-brand-50' : ''
                     }`}>
-                    <td className="py-2 font-medium">{sale.displayCode}</td>
+                    <td className="py-2 font-medium">
+                      <button type="button" aria-label={`Ver ${sale.displayCode}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSelectedId(sale.id)
+                        }}
+                        className="rounded text-left font-medium hover:underline">
+                        {sale.displayCode}
+                      </button>
+                    </td>
                     <td className="py-2">{dateTime.format(new Date(sale.createdAt))}</td>
                     <td className="py-2">{saleTypeLabel(sale)}</td>
                     <td className="py-2">${sale.totalPesos.toLocaleString('es-CO')}</td>

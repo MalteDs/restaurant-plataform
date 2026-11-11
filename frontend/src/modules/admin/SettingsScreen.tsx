@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 
 interface Location {
   id: string
@@ -117,7 +117,7 @@ export default function SettingsScreen() {
           </label>
           <Button type="submit">Guardar</Button>
           {message ? <p className="text-sm text-green-700">{message}</p> : null}
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <FormError className="mt-3">{error}</FormError>
         </form>
       </Card>
       <Card className="mt-4 max-w-md">
@@ -145,7 +145,7 @@ export default function SettingsScreen() {
           ))}
         </ul>
         {categoryMessage ? <p className="mt-3 text-sm text-green-700">{categoryMessage}</p> : null}
-        {categoryError ? <p className="mt-3 text-sm text-red-600">{categoryError}</p> : null}
+        <FormError className="mt-3">{categoryError}</FormError>
       </Card>
     </div>
   )

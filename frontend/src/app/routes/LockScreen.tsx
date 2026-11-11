@@ -2,10 +2,10 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../providers/AuthProvider'
-import { Button, Card, Input } from '../../shared/ui'
+import { Button, Card, FormError, Input } from '../../shared/ui'
 
 export default function LockScreen() {
-  const { user, unlock } = useAuth()
+  const { user, unlock, logout } = useAuth()
   const navigate = useNavigate()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -37,17 +37,27 @@ export default function LockScreen() {
               type="password"
               inputMode="numeric"
               autoComplete="off"
+              autoFocus
               maxLength={6}
               value={pin}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? 'pin-error' : undefined}
               onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))}
               required
             />
           </label>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <FormError id="pin-error">{error}</FormError>
           <Button className="w-full" type="submit">
             Desbloquear
           </Button>
         </form>
+        <Button className="mt-3 w-full" variant="ghost"
+          onClick={() => {
+            logout()
+            navigate('/login', { replace: true })
+          }}>
+          Iniciar sesión de nuevo
+        </Button>
       </Card>
     </main>
   )

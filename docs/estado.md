@@ -1,9 +1,9 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-10
-**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos + operación de caja implementados; prueba física pendiente.
+**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos + operación de caja + accesibilidad del lote 1 implementados; prueba física pendiente.
 **Tarea en curso:** ninguna.
-**Último commit de implementación:** ver `git log -1` (detalle de pedidos).
+**Último commit de implementación:** ver `git log -1` (accesibilidad y foco).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
 **Bloqueos:** ninguno.
 
@@ -132,6 +132,28 @@
 - Las categorías se siembran en el dispositivo y se actualizan desde el servidor cuando hay conexión.
 - Límite conocido: el historial de turnos es del dispositivo. Ver turnos de otras cajas o sedes requiere un endpoint central y queda fuera.
 - Decisión pendiente con los dueños: cómo consolidan gastos y cierres entre las tres sedes.
+
+## Accesibilidad y foco visible — lote 1 (2026-11-11)
+
+- [x] Tarea 1 — Contraste de marca y foco visible global
+- [x] Tarea 2 — Modal compartido con foco atrapado y Escape
+- [x] Tarea 3 — Errores anunciados con `role="alert"`
+- [x] Tarea 4 — Salida al login desde la pantalla de bloqueo
+- [x] Tarea 5 — Fila de Pedidos con acción accesible y semántica de tabla
+- [x] Tarea 6 — Documentación y verificación
+
+### Verificación
+
+- Frontend: `npm test` → 31 archivos, 123 pruebas, 0 fallos; `npm run build` correcto.
+- Contraste: `brand-600` `#c2410c` = 5.18:1 y `brand-700` `#9a3412` = 7.31:1 sobre blanco.
+- Pruebas nuevas: `Modal` (foco, Escape, Tab), `FormError` (alert), recuperación en Bloqueo y semántica de tabla en Pedidos.
+
+### Notas de la iteración
+
+- Los modales de precio, presentación y modificadores ahora son diálogos accesibles y cierran con Escape.
+- Los errores de formulario se anuncian; los paneles de Caja ya usaban `role="alert"` y se mantuvieron.
+- La rama se basó en `feat/mejoras-venta` e incluye Pedidos. Los lotes 2 y 3 quedan pendientes.
+- Sin cambios de backend ni dependencias nuevas.
 
 ## Notas de la sesión
 

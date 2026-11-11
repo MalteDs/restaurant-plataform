@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../providers/AuthProvider'
-import { Button, Card, Input } from '../../shared/ui'
+import { Button, Card, FormError, Input } from '../../shared/ui'
 import { ApiError } from '../../infrastructure/api/client'
 
 export default function LoginScreen() {
@@ -84,7 +84,7 @@ export default function LoginScreen() {
               onChange={(event) => setLocationCode(event.target.value)}
             />
           </label>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <FormError>{error}</FormError>
           <Button className="w-full" type="submit" disabled={submitting}>
             {submitting ? 'Entrando…' : 'Entrar'}
           </Button>
