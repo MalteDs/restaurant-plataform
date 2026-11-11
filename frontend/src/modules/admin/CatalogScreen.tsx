@@ -6,6 +6,7 @@ import { formatSaleDays } from '../sales/sale-days'
 import { Button, Card, FormError, Input, PageHeader } from '../../shared/ui'
 import AddonsPanel from './AddonsPanel'
 import CategoryPanel from './CategoryPanel'
+import IngredientsPanel from './IngredientsPanel'
 import ProductForm from './ProductForm'
 import type {
   AdminAddon,
@@ -255,7 +256,9 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
       {section === 'Adicionales' ? (
         <AddonsPanel addons={addons} ingredients={ingredients} onChanged={refreshAll} />
       ) : null}
-      {section === 'Ingredientes' ? <Card><p className="text-sm text-gray-500">Sin ingredientes.</p></Card> : null}
+      {section === 'Ingredientes' ? (
+        <IngredientsPanel ingredients={ingredients} onChanged={refreshAll} />
+      ) : null}
       {section === 'Categorías' ? <CategoryPanel categories={categories} onChanged={refreshAll} /> : null}
     </div>
   )

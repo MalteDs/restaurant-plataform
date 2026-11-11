@@ -215,6 +215,15 @@ it('abre la subsección de adicionales desde el catálogo', async () => {
   expect(screen.getByLabelText(/nombre del adicional/i)).toBeInTheDocument()
 })
 
+it('abre la subsección de ingredientes desde el catálogo', async () => {
+  mockAdminSnapshot({ products: [], categories: [] })
+  const database = await db()
+  render(<CatalogScreen database={database} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: /^ingredientes$/i }))
+  expect(screen.getByLabelText(/nombre del ingrediente/i)).toBeInTheDocument()
+})
+
 it('avisa si no puede sincronizar la caja local después de guardar', async () => {
   mockAdminSnapshot({
     products: [],
