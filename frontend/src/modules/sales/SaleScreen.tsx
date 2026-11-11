@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductRow } from '../../infrastructure/database/schema'
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { useAuth } from '../../app/providers/AuthProvider'
-import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import { Button, Card, Input, Modal, PageHeader } from '../../shared/ui'
 import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
 import { isProductSellable } from './sale-days'
@@ -638,93 +638,83 @@ export default function SaleScreen({
       </div>
 
       {priceLine ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md">
-            <h2 className="mb-3 font-semibold text-gray-900">
-              Cambiar precio de {priceLine.product.name}
-            </h2>
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Precio unitario
-                <Input className="mt-1" type="number" min={0} value={priceValue}
-                  onChange={(event) => setPriceValue(event.target.value)} />
-              </label>
-              <p className="text-xs text-gray-500">
-                Precio de lista ${priceLine.catalogUnitPricePesos.toLocaleString('es-CO')}
-              </p>
-              <label className="block text-sm font-medium text-gray-700">
-                Motivo
-                <Input className="mt-1" maxLength={200} value={priceReason}
-                  onChange={(event) => setPriceReason(event.target.value)} />
-              </label>
-              {priceError ? <p className="text-sm text-red-600">{priceError}</p> : null}
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setPriceLine(null)}>Cancelar</Button>
-                <Button onClick={savePrice}>Guardar precio</Button>
-              </div>
+        <Modal title={`Cambiar precio de ${priceLine.product.name}`}
+          onClose={() => setPriceLine(null)}>
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Precio unitario
+              <Input className="mt-1" type="number" min={0} value={priceValue}
+                onChange={(event) => setPriceValue(event.target.value)} />
+            </label>
+            <p className="text-xs text-gray-500">
+              Precio de lista ${priceLine.catalogUnitPricePesos.toLocaleString('es-CO')}
+            </p>
+            <label className="block text-sm font-medium text-gray-700">
+              Motivo
+              <Input className="mt-1" maxLength={200} value={priceReason}
+                onChange={(event) => setPriceReason(event.target.value)} />
+            </label>
+            {priceError ? <p className="text-sm text-red-600">{priceError}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setPriceLine(null)}>Cancelar</Button>
+              <Button onClick={savePrice}>Guardar precio</Button>
             </div>
-          </Card>
-        </div>
+          </div>
+        </Modal>
       ) : null}
 
       {pickingFamily ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md">
-            <h2 className="mb-1 font-semibold text-gray-900">{pickingFamily.name}</h2>
-            <p className="mb-3 text-sm text-gray-500">Elige la presentación</p>
-            <div className="grid grid-cols-2 gap-2">
-              {pickingFamily.variants.map((variant) => (
-                <button
-                  key={variant.product.id}
-                  type="button"
-                  onClick={() => chooseVariant(variant.product)}
-                  className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
-                >
-                  <span className="block text-sm font-semibold text-gray-900">
-                    {variant.label}
-                  </span>
-                  <span className="text-sm text-brand-600">
-                    ${variant.product.pricePesos.toLocaleString('es-CO')}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <Button variant="ghost" onClick={() => setPickingFamily(null)}>Cancelar</Button>
-            </div>
-          </Card>
-        </div>
+        <Modal title={pickingFamily.name} onClose={() => setPickingFamily(null)}>
+          <p className="mb-3 text-sm text-gray-500">Elige la presentación</p>
+          <div className="grid grid-cols-2 gap-2">
+            {pickingFamily.variants.map((variant) => (
+              <button
+                key={variant.product.id}
+                type="button"
+                onClick={() => chooseVariant(variant.product)}
+                className="rounded-lg border border-gray-200 p-3 text-left hover:border-brand-500"
+              >
+                <span className="block text-sm font-semibold text-gray-900">
+                  {variant.label}
+                </span>
+                <span className="text-sm text-brand-600">
+                  ${variant.product.pricePesos.toLocaleString('es-CO')}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="ghost" onClick={() => setPickingFamily(null)}>Cancelar</Button>
+          </div>
+        </Modal>
       ) : null}
 
       {picking ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md">
-            <h2 className="mb-3 font-semibold text-gray-900">Modificadores de {picking.name}</h2>
-            <div className="space-y-4">
-              {pickingGroups.map((group) => (
-                <section key={group.id}>
-                  <p className="text-sm font-medium text-gray-700">
-                    {group.name} (mín {group.minSelection}, máx {group.maxSelection})
-                  </p>
-                  {group.modifiers.map((modifier) => (
-                    <label key={modifier.id} className="mt-1 flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={(selected[group.id] ?? []).some((item) => item.id === modifier.id)}
-                        onChange={() => toggleModifier(group, modifier)}
-                      />
-                      {modifier.name} +${modifier.additionalPricePesos.toLocaleString('es-CO')}
-                    </label>
-                  ))}
-                </section>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setPicking(null)}>Cancelar</Button>
-              <Button onClick={confirmModifiers}>Agregar</Button>
-            </div>
-          </Card>
-        </div>
+        <Modal title={`Modificadores de ${picking.name}`} onClose={() => setPicking(null)}>
+          <div className="space-y-4">
+            {pickingGroups.map((group) => (
+              <section key={group.id}>
+                <p className="text-sm font-medium text-gray-700">
+                  {group.name} (mín {group.minSelection}, máx {group.maxSelection})
+                </p>
+                {group.modifiers.map((modifier) => (
+                  <label key={modifier.id} className="mt-1 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(selected[group.id] ?? []).some((item) => item.id === modifier.id)}
+                      onChange={() => toggleModifier(group, modifier)}
+                    />
+                    {modifier.name} +${modifier.additionalPricePesos.toLocaleString('es-CO')}
+                  </label>
+                ))}
+              </section>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPicking(null)}>Cancelar</Button>
+            <Button onClick={confirmModifiers}>Agregar</Button>
+          </div>
+        </Modal>
       ) : null}
     </div>
   )
