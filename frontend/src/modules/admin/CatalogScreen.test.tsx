@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { request } from '../../infrastructure/api/client'
@@ -126,7 +126,8 @@ it('edita nombre, precio y costo de un producto', async () => {
   const database = await db()
   render(<CatalogScreen database={database} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: /editar/i }))
+  const products = await screen.findByRole('table')
+  await userEvent.click(within(products).getByRole('button', { name: /editar/i }))
   await userEvent.clear(screen.getByLabelText(/^nombre$/i))
   await userEvent.type(screen.getByLabelText(/^nombre$/i), 'SENCILLA ESPECIAL')
   await userEvent.clear(screen.getByLabelText(/^precio$/i))

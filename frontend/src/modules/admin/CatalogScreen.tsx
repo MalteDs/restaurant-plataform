@@ -4,6 +4,7 @@ import { request } from '../../infrastructure/api/client'
 import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
 import { formatSaleDays } from '../sales/sale-days'
 import { Button, Card, Input, PageHeader } from '../../shared/ui'
+import CategoryPanel from './CategoryPanel'
 import ProductForm from './ProductForm'
 import type { AdminProduct, AdminSnapshot, ProductInput } from './catalog-admin'
 
@@ -188,6 +189,8 @@ export default function CatalogScreen({ database = db }: { database?: CajaDb }) 
               </div>
             ) : null}
           </Card>
+
+          <CategoryPanel categories={categories} onChanged={refreshAll} />
         </div>
 
         {editing ? (
