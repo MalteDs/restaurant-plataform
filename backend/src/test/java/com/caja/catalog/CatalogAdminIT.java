@@ -17,6 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,6 +63,26 @@ class CatalogAdminIT {
     assertFalse(publicGroupNames().contains("GRUPO INACTIVO"));
   }
 
+  @Test void assignsAndClearsModifierGroupsOnProduct() throws Exception {
+    var groupId = createModifierGroup("GRUPO ASIGNABLE");
+    var productId = createProductWithGroups("PRODUCTO CON GRUPO", List.of(groupId));
+
+    assertEquals(List.of(groupId), adminProductGroupIds(productId));
+
+    updateProductGroups(productId, List.of());
+    assertEquals(List.of(), adminProductGroupIds(productId));
+  }
+
+  @Test void rejectsUnknownModifierGroupOnProduct() throws Exception {
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_grupo_malo"))
+            .content(json.writeValueAsString(Map.of(
+                "name", "PRODUCTO GRUPO MALO",
+                "pricePesos", 10000,
+                "modifierGroupIds", List.of(UUID.randomUUID())))))
+        .andExpect(status().isBadRequest());
+  }
+
   private UUID createProduct(String name, long pricePesos) throws Exception {
     var body = mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
             .header("Authorization", "Bearer " + adminToken())
@@ -69,6 +90,35 @@ class CatalogAdminIT {
         .andExpect(status().isCreated())
         .andReturn().getResponse().getContentAsString();
     return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private UUID createProductWithGroups(String name, List<UUID> groupIds) throws Exception {
+    var body = mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken())
+            .content(json.writeValueAsString(Map.of("name", name, "pricePesos", 10000,
+                "modifierGroupIds", groupIds))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private void updateProductGroups(UUID productId, List<UUID> groupIds) throws Exception {
+    mvc.perform(put("/api/catalog/products/" + productId).contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken())
+            .content(json.writeValueAsString(Map.of("modifierGroupIds", groupIds))))
+        .andExpect(status().isNoContent());
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<UUID> adminProductGroupIds(UUID productId) throws Exception {
+    var product = ((List<Map<String, Object>>) snapshot("/api/catalog/admin").get("products"))
+        .stream()
+        .filter(row -> productId.toString().equals(String.valueOf(row.get("id"))))
+        .findFirst()
+        .orElseThrow();
+    return ((List<String>) product.get("modifierGroupIds")).stream()
+        .map(UUID::fromString)
+        .toList();
   }
 
   private void deactivateProduct(UUID id) throws Exception {
@@ -156,7 +206,11 @@ class CatalogAdminIT {
   }
 
   private String adminToken() throws Exception {
-    return tokenFor("admin_catalogo_estado", "ADMIN");
+    return adminToken("admin_catalogo_estado");
+  }
+
+  private String adminToken(String username) throws Exception {
+    return tokenFor(username, "ADMIN");
   }
 
   private String tokenFor(String username, String role) throws Exception {

@@ -52,7 +52,8 @@ public class CatalogController {
       @AuthenticationPrincipal AuthenticatedUser user) {
     var id = catalog.createProduct(new TenantId(user.tenantId()), user.locationId(),
         request.name(), request.categoryId(), request.pricePesos(), request.costPesos(),
-        request.kind() == null ? "PRODUCT" : request.kind(), request.saleDays());
+        request.kind() == null ? "PRODUCT" : request.kind(), request.saleDays(),
+        request.modifierGroupIds());
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
   }
 
@@ -63,7 +64,7 @@ public class CatalogController {
                                             @AuthenticationPrincipal AuthenticatedUser user) {
     catalog.updateProduct(new TenantId(user.tenantId()), user.locationId(), id, request.name(),
         request.categoryId(), request.pricePesos(), request.costPesos(), request.active(),
-        request.saleDays());
+        request.saleDays(), request.modifierGroupIds());
     return ResponseEntity.noContent().build();
   }
 
@@ -118,7 +119,8 @@ public class CatalogController {
                                @NotNull @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
                                @Pattern(regexp = "PRODUCT|COMBO") String kind,
-                               List<@NotNull @Min(1) @Max(7) Integer> saleDays) {
+                               List<@NotNull @Min(1) @Max(7) Integer> saleDays,
+                               List<@NotNull UUID> modifierGroupIds) {
   }
 
   public record ProductUpdate(@Size(max = 100) String name,
@@ -126,7 +128,8 @@ public class CatalogController {
                                @PositiveOrZero Long pricePesos,
                                @PositiveOrZero Long costPesos,
                                Boolean active,
-                               List<@NotNull @Min(1) @Max(7) Integer> saleDays) {
+                               List<@NotNull @Min(1) @Max(7) Integer> saleDays,
+                               List<@NotNull UUID> modifierGroupIds) {
   }
 
   public record CategoryRequest(@NotBlank @Size(max = 100) String name, Integer sortOrder) {

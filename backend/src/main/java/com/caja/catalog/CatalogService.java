@@ -133,7 +133,7 @@ public class CatalogService {
   @Transactional
   public UUID createProduct(TenantId tenantId, UUID locationId, String name, UUID categoryId,
                             long pricePesos, Long costPesos, String kind,
-                            List<Integer> saleDays) {
+                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
     var id = UUID.randomUUID();
     try {
       jdbc.update("""
@@ -146,6 +146,9 @@ public class CatalogService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "El producto ya existe o es invalido");
     }
     bumpVersion(tenantId, locationId);
+    if (modifierGroupIds != null && !modifierGroupIds.isEmpty()) {
+      replaceModifierGroups(tenantId, locationId, id, modifierGroupIds);
+    }
     audit.record(tenantId.value(), locationId, null, "CATALOG_PRODUCT_CREATED", "product", id,
         Map.of("name", name, "pricePesos", pricePesos));
     return id;
@@ -154,7 +157,7 @@ public class CatalogService {
   @Transactional
   public void updateProduct(TenantId tenantId, UUID locationId, UUID productId, String name,
                             UUID categoryId, Long pricePesos, Long costPesos, Boolean active,
-                            List<Integer> saleDays) {
+                            List<Integer> saleDays, List<UUID> modifierGroupIds) {
     if (name != null && name.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre no puede estar vacio");
     }
@@ -171,7 +174,32 @@ public class CatalogService {
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
+    if (modifierGroupIds != null) {
+      replaceModifierGroups(tenantId, locationId, productId, modifierGroupIds);
+    }
     bumpVersion(tenantId, locationId);
+  }
+
+  private void replaceModifierGroups(TenantId tenantId, UUID locationId, UUID productId,
+                                     List<UUID> groupIds) {
+    jdbc.update("""
+        delete from product_modifier_groups
+        where product_id = ? and tenant_id = ? and location_id = ?
+        """, productId, tenantId.value(), locationId);
+    for (var groupId : groupIds) {
+      var exists = jdbc.queryForObject("""
+          select count(*) from modifier_groups
+          where id = ? and tenant_id = ? and location_id = ?
+          """, Integer.class, groupId, tenantId.value(), locationId);
+      if (exists == null || exists == 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Grupo de modificadores invalido");
+      }
+      jdbc.update("""
+          insert into product_modifier_groups(product_id, modifier_group_id, tenant_id, location_id)
+          values (?, ?, ?, ?)
+          """, productId, groupId, tenantId.value(), locationId);
+    }
   }
 
   @Transactional
