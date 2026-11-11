@@ -82,6 +82,30 @@ export default function ReportsScreen() {
               </ul>
             </>
           ) : null}
+          {summary.byIngredient && summary.byIngredient.length > 0 ? (
+            <>
+              <h3 className="mt-5 text-sm font-semibold text-gray-900">Consumo de ingredientes</h3>
+              <ul className="mt-2 text-sm">
+                {summary.byIngredient.map((row) => (
+                  <li key={row.name} className="flex justify-between border-t border-gray-100 py-1">
+                    <span>{row.name}</span>
+                    <span>
+                      {row.quantity.toLocaleString('es-CO', { maximumFractionDigits: 3 })}{' '}
+                      {row.unit === 'GRAM' ? 'g' : 'unidad(es)'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-sm text-gray-600">
+                Cobertura de recetas: {(summary.recipeCoveragePercent ?? 0).toLocaleString('es-CO')} %
+              </p>
+              {(summary.recipeCoveragePercent ?? 0) < 80 ? (
+                <p role="status" className="mt-1 text-sm text-amber-700">
+                  El reporte es incompleto: faltan recetas por configurar.
+                </p>
+              ) : null}
+            </>
+          ) : null}
           <Button className="mt-4" variant="ghost" onClick={onExport}>Exportar CSV</Button>
         </Card>
       ) : (

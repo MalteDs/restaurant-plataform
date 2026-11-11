@@ -18,6 +18,13 @@ export interface LocalSummary {
   byHour: Array<{ hour: number; salesPesos: number }>
   byProduct: Array<{ name: string; quantity: number; salesPesos: number }>
   byExpenseCategory: Array<{ name: string; amountPesos: number }>
+  byIngredient?: Array<{
+    name: string
+    unit: 'UNIT' | 'GRAM'
+    quantity: number
+    wastePercent: number
+  }>
+  recipeCoveragePercent?: number
 }
 
 function hourInBogota(iso: string): number {
@@ -177,6 +184,8 @@ export async function dailySummary(
   loadRemoteExpenses?: () => Promise<{
     expensesPesos: number
     byExpenseCategory?: Array<{ name: string; amountPesos: number }>
+    byIngredient?: LocalSummary['byIngredient']
+    recipeCoveragePercent?: number
   }>
 ): Promise<LocalSummary> {
   const local = await localSummary(database, date, date)
@@ -184,7 +193,8 @@ export async function dailySummary(
     return local
   }
   try {
-    const { expensesPesos, byExpenseCategory } = await loadRemoteExpenses()
+    const { expensesPesos, byExpenseCategory, byIngredient, recipeCoveragePercent } =
+      await loadRemoteExpenses()
     const delta = await pendingCashExpenseDelta(database, date, date)
     const merged = new Map<string, number>()
     for (const row of byExpenseCategory ?? []) {
@@ -200,6 +210,8 @@ export async function dailySummary(
       byExpenseCategory: [...merged.entries()]
         .filter(([, amountPesos]) => amountPesos !== 0)
         .map(([name, amountPesos]) => ({ name, amountPesos })),
+      byIngredient: byIngredient ?? local.byIngredient,
+      recipeCoveragePercent: recipeCoveragePercent ?? local.recipeCoveragePercent,
       operatingProfitPesos: local.netSalesPesos - local.costPesos - total
     }
   } catch {
