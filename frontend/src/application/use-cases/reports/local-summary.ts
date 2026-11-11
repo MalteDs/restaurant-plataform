@@ -1,4 +1,4 @@
-import type { CajaDb } from '../../../infrastructure/database/schema'
+import type { CajaDb, CashMovementRow } from '../../../infrastructure/database/schema'
 
 export interface LocalSummary {
   salesPesos: number
@@ -39,6 +39,20 @@ function groupBy<T>(rows: T[], key: (row: T) => string) {
   return groups
 }
 
+function groupCashExpenses(movements: CashMovementRow[]) {
+  const groups = new Map<string, number>()
+  for (const movement of movements) {
+    if (movement.voidedAt || !movement.expenseCategoryName) {
+      continue
+    }
+    groups.set(movement.expenseCategoryName,
+      (groups.get(movement.expenseCategoryName) ?? 0) + movement.amountPesos)
+  }
+  return [...groups.entries()]
+    .map(([name, amountPesos]) => ({ name, amountPesos }))
+    .sort((left, right) => right.amountPesos - left.amountPesos)
+}
+
 export async function localSummary(
   database: CajaDb,
   from: string,
@@ -53,6 +67,10 @@ export async function localSummary(
     .filter((item) => saleIds.has(item.saleId))
   const refunds = (await database.refunds.toArray())
     .filter((refund) => refund.operationalDate >= from && refund.operationalDate <= to)
+  const cashMovements = (await database.cashMovements.toArray())
+    .filter((movement) => movement.operationalDate >= from && movement.operationalDate <= to)
+  const cashExpenses = groupCashExpenses(cashMovements)
+  const cashExpensesPesos = cashExpenses.reduce((sum, row) => sum + row.amountPesos, 0)
 
   const sumPayments = (method: string) => payments
     .filter((payment) => payment.method === method)
@@ -104,14 +122,53 @@ export async function localSummary(
     refundCount: refunds.length,
     averageTicketPesos: orders === 0 ? 0 : Math.round(netSalesPesos / orders),
     costPesos,
-    expensesPesos: 0,
-    operatingProfitPesos: netSalesPesos - costPesos,
+    expensesPesos: cashExpensesPesos,
+    operatingProfitPesos: netSalesPesos - costPesos - cashExpensesPesos,
     byCategory,
     byDay,
     byHour,
     byProduct,
-    byExpenseCategory: []
+    byExpenseCategory: cashExpenses
   }
+}
+
+export async function pendingCashExpenseDelta(
+  database: CajaDb,
+  from: string,
+  to: string
+): Promise<{ amountPesos: number; byCategory: Array<{ name: string; amountPesos: number }> }> {
+  const movements = (await database.cashMovements.toArray())
+    .filter((movement) => movement.operationalDate >= from && movement.operationalDate <= to
+      && movement.expenseCategoryName)
+  const operations = await database.operations.where('type').equals('CASH_MOVEMENT').toArray()
+  const groups = new Map<string, number>()
+
+  const add = (name: string, amountPesos: number) => {
+    groups.set(name, (groups.get(name) ?? 0) + amountPesos)
+  }
+
+  for (const movement of movements) {
+    const payloadOf = (operation: typeof operations[number]) =>
+      (operation.payload ?? {}) as Record<string, unknown>
+    const creation = operations.find((operation) =>
+      operation.entityId === movement.id && payloadOf(operation).voided !== true)
+    const replacement = operations.find((operation) =>
+      payloadOf(operation).replacesMovementId === movement.id)
+
+    if (!movement.voidedAt) {
+      if (!creation || creation.status !== 'SYNCED') {
+        add(movement.expenseCategoryName!, movement.amountPesos)
+      }
+    } else if (creation?.status === 'SYNCED' && replacement?.status !== 'SYNCED') {
+      add(movement.expenseCategoryName!, -movement.amountPesos)
+    }
+  }
+
+  const byCategory = [...groups.entries()]
+    .filter(([, amountPesos]) => amountPesos !== 0)
+    .map(([name, amountPesos]) => ({ name, amountPesos }))
+    .sort((left, right) => right.amountPesos - left.amountPesos)
+  return { amountPesos: byCategory.reduce((sum, row) => sum + row.amountPesos, 0), byCategory }
 }
 
 export async function dailySummary(
@@ -128,11 +185,22 @@ export async function dailySummary(
   }
   try {
     const { expensesPesos, byExpenseCategory } = await loadRemoteExpenses()
+    const delta = await pendingCashExpenseDelta(database, date, date)
+    const merged = new Map<string, number>()
+    for (const row of byExpenseCategory ?? []) {
+      merged.set(row.name, (merged.get(row.name) ?? 0) + row.amountPesos)
+    }
+    for (const row of delta.byCategory) {
+      merged.set(row.name, (merged.get(row.name) ?? 0) + row.amountPesos)
+    }
+    const total = expensesPesos + delta.amountPesos
     return {
       ...local,
-      expensesPesos,
-      byExpenseCategory: byExpenseCategory ?? [],
-      operatingProfitPesos: local.netSalesPesos - local.costPesos - expensesPesos
+      expensesPesos: total,
+      byExpenseCategory: [...merged.entries()]
+        .filter(([, amountPesos]) => amountPesos !== 0)
+        .map(([name, amountPesos]) => ({ name, amountPesos })),
+      operatingProfitPesos: local.netSalesPesos - local.costPesos - total
     }
   } catch {
     return local

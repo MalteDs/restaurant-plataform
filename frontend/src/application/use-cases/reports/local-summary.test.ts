@@ -125,3 +125,82 @@ it('mezcla el desglose de gastos por categoría del servidor', async () => {
 
   expect(summary.byExpenseCategory).toEqual([{ name: 'Domicilios', amountPesos: 5000 }])
 })
+
+it('incluye gastos de caja y excluye anulados', async () => {
+  const db = await seed()
+  await db.cashMovements.bulkPut([
+    { id: 'm1', shiftId: 'shift-1', type: 'WITHDRAWAL', amountPesos: 5000,
+      reason: 'lechuga', operationalDate: '2026-11-01', expenseCategoryName: 'Fruver' },
+    { id: 'm2', shiftId: 'shift-1', type: 'WITHDRAWAL', amountPesos: 3000,
+      reason: 'jabon', operationalDate: '2026-11-01', expenseCategoryName: 'Aseo',
+      voidedAt: '2026-11-01T20:00:00.000Z', voidedBy: 'u1' }
+  ])
+  const summary = await localSummary(db, '2026-11-01', '2026-11-01')
+  expect(summary.expensesPesos).toBe(5000)
+  expect(summary.byExpenseCategory).toEqual([{ name: 'Fruver', amountPesos: 5000 }])
+})
+
+it('suma el gasto pendiente y no lo duplica al sincronizar', async () => {
+  const db = await seed()
+  await db.cashMovements.put({ id: 'm1', shiftId: 'shift-1', type: 'WITHDRAWAL',
+    amountPesos: 5000, reason: 'lechuga', operationalDate: '2026-11-01',
+    expenseCategoryName: 'Fruver' })
+  await db.operations.put({ operationId: 'o1', seq: 1, type: 'CASH_MOVEMENT',
+    entityId: 'm1', userId: 'u1', clientCreatedAt: '2026-11-01T18:00:00.000Z',
+    payload: {}, status: 'LOCAL_PENDING', attempts: 0 })
+
+  const pending = await dailySummary(db, '2026-11-01', async () => ({ expensesPesos: 0 }))
+  expect(pending.expensesPesos).toBe(5000)
+
+  await db.operations.update('o1', { status: 'SYNCED' })
+  const synced = await dailySummary(db, '2026-11-01', async () => ({ expensesPesos: 5000 }))
+  expect(synced.expensesPesos).toBe(5000)
+})
+
+it('resta una anulación pendiente y no resta la ya sincronizada', async () => {
+  const db = await seed()
+  await db.cashMovements.put({ id: 'm1', shiftId: 'shift-1', type: 'WITHDRAWAL',
+    amountPesos: 5000, reason: 'lechuga', operationalDate: '2026-11-01',
+    expenseCategoryName: 'Fruver', voidedAt: '2026-11-01T20:00:00.000Z', voidedBy: 'u1' })
+  await db.operations.put({ operationId: 'create', seq: 1, type: 'CASH_MOVEMENT',
+    entityId: 'm1', userId: 'u1', clientCreatedAt: '2026-11-01T18:00:00.000Z',
+    payload: {}, status: 'SYNCED', attempts: 0 })
+  await db.operations.put({ operationId: 'void', seq: 2, type: 'CASH_MOVEMENT',
+    entityId: 'm1', userId: 'u1', clientCreatedAt: '2026-11-01T19:00:00.000Z',
+    payload: { voided: true, replacesMovementId: 'm1' }, status: 'LOCAL_PENDING', attempts: 0 })
+
+  const pendingVoid = await dailySummary(db, '2026-11-01', async () => ({
+    expensesPesos: 5000, byExpenseCategory: [{ name: 'Fruver', amountPesos: 5000 }]
+  }))
+  expect(pendingVoid.expensesPesos).toBe(0)
+  expect(pendingVoid.byExpenseCategory).toEqual([])
+
+  await db.operations.update('void', { status: 'SYNCED' })
+  const syncedVoid = await dailySummary(db, '2026-11-01', async () => ({ expensesPesos: 0 }))
+  expect(syncedVoid.expensesPesos).toBe(0)
+})
+
+it('ajusta una corrección pendiente sin duplicar', async () => {
+  const db = await seed()
+  await db.cashMovements.bulkPut([
+    { id: 'm1', shiftId: 'shift-1', type: 'WITHDRAWAL', amountPesos: 5000,
+      reason: 'lechuga', operationalDate: '2026-11-01', expenseCategoryName: 'Fruver',
+      voidedAt: '2026-11-01T20:00:00.000Z', voidedBy: 'u1' },
+    { id: 'm2', shiftId: 'shift-1', type: 'WITHDRAWAL', amountPesos: 3000,
+      reason: 'lechuga', operationalDate: '2026-11-01', expenseCategoryName: 'Aseo',
+      replacesMovementId: 'm1' }
+  ])
+  await db.operations.bulkPut([
+    { operationId: 'create', seq: 1, type: 'CASH_MOVEMENT', entityId: 'm1', userId: 'u1',
+      clientCreatedAt: '2026-11-01T18:00:00.000Z', payload: {}, status: 'SYNCED', attempts: 0 },
+    { operationId: 'correct', seq: 2, type: 'CASH_MOVEMENT', entityId: 'm2', userId: 'u1',
+      clientCreatedAt: '2026-11-01T19:00:00.000Z',
+      payload: { replacesMovementId: 'm1' }, status: 'LOCAL_PENDING', attempts: 0 }
+  ])
+
+  const summary = await dailySummary(db, '2026-11-01', async () => ({
+    expensesPesos: 5000, byExpenseCategory: [{ name: 'Fruver', amountPesos: 5000 }]
+  }))
+  expect(summary.expensesPesos).toBe(3000)
+  expect(summary.byExpenseCategory).toEqual([{ name: 'Aseo', amountPesos: 3000 }])
+})

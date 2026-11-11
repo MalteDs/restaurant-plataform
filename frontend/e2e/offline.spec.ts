@@ -10,7 +10,7 @@ test('vende, cierra turno y sincroniza al volver la red', async ({ page, context
 
   await context.setOffline(true)
   await sell(page, 'SENCILLA')
-  await closeShift(page, 65000)
+  await closeShift(page, { 20000: 3, 5000: 1 }, 'faltante')
   await expect(page.getByTestId('difference')).toHaveText(/-1\.500/)
 
   await context.setOffline(false)

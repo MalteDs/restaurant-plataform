@@ -4,6 +4,7 @@ import com.caja.payments.PaymentMethod;
 import com.caja.sales.CreateSaleCommand;
 import com.caja.sales.SaleApplicationService;
 import com.caja.sales.SaleType;
+import com.caja.shifts.CashMovementCommand;
 import com.caja.shifts.CloseShiftCommand;
 import com.caja.shifts.OpenShiftCommand;
 import com.caja.shifts.RefundCommand;
@@ -102,7 +103,9 @@ public class SyncService {
   }
 
   private void validate(SyncOperation operation, SyncBatch batch) {
-    if (!"CREATE_SALE".equals(operation.type()) && !"REFUND_SALE".equals(operation.type())) {
+    if (!"CREATE_SALE".equals(operation.type()) && !"REFUND_SALE".equals(operation.type())
+        && !"CASH_MOVEMENT".equals(operation.type())
+        && !"CLOSE_SHIFT".equals(operation.type())) {
       return;
     }
     var payload = operation.payload();
@@ -113,6 +116,42 @@ public class SyncService {
         batch.deviceId());
     if (open == null || open == 0) {
       throw new IllegalStateException("No hay turno abierto para este dispositivo");
+    }
+    if ("CASH_MOVEMENT".equals(operation.type())) {
+      var voided = Boolean.TRUE.equals(payload.get("voided"));
+      if (voided) {
+        if (payload.get("replacesMovementId") == null) {
+          throw new IllegalStateException("Falta el movimiento a anular");
+        }
+      } else {
+        var type = payload.get("movementType");
+        if (!"DEPOSIT".equals(type) && !"WITHDRAWAL".equals(type)) {
+          throw new IllegalArgumentException("El tipo de movimiento no es valido");
+        }
+        var reason = payload.get("reason") instanceof String text ? text.trim() : "";
+        if (reason.length() < 5 || reason.length() > 200) {
+          throw new IllegalArgumentException("El motivo debe tener entre 5 y 200 caracteres");
+        }
+        var amount = payload.get("amountPesos");
+        if (!(amount instanceof Number number) || number.longValue() <= 0) {
+          throw new IllegalArgumentException("El monto debe ser mayor que cero");
+        }
+      }
+    }
+    if ("CLOSE_SHIFT".equals(operation.type())) {
+      var counted = ((Number) payload.get("countedCashPesos")).longValue();
+      ShiftApplicationService.validateClose(counted, toBreakdown(payload.get("countedBreakdown")),
+          (String) payload.get("closeNote"));
+    }
+    if ("CASH_MOVEMENT".equals(operation.type())) {
+      var category = payload.get("expenseCategoryName");
+      if (category != null) {
+        var name = category.toString().trim();
+        if (name.isEmpty() || name.length() > 100) {
+          throw new IllegalArgumentException(
+              "La categoria de gasto debe tener entre 1 y 100 caracteres");
+        }
+      }
     }
     if ("CREATE_SALE".equals(operation.type())) {
       var command = toSaleCommand(operation, batch);
@@ -167,18 +206,26 @@ public class SyncService {
         yield new Outcome(shiftId, Map.of("shiftId", shiftId.toString()));
       }
       case "CASH_MOVEMENT" -> {
-        shifts.movement(batch.tenantId(), batch.locationId(), uuid(payload.get("shiftId")),
-            operation.userId(), (String) payload.get("movementType"),
-            ((Number) payload.get("amountPesos")).longValue(), (String) payload.get("reason"),
-            operation.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate());
-        yield new Outcome(null, Map.of("ok", true));
+        var movementId = operation.entityId() == null ? UUID.randomUUID() : operation.entityId();
+        var replaces = payload.get("replacesMovementId") == null ? null
+            : uuid(payload.get("replacesMovementId"));
+        var amount = payload.get("amountPesos") == null ? 0
+            : ((Number) payload.get("amountPesos")).longValue();
+        shifts.movement(new CashMovementCommand(batch.tenantId(), batch.locationId(),
+            uuid(payload.get("shiftId")), operation.userId(), movementId,
+            (String) payload.get("movementType"), amount, (String) payload.get("reason"),
+            (String) payload.get("expenseCategoryName"), replaces,
+            Boolean.TRUE.equals(payload.get("voided")),
+            operation.clientCreatedAt().atZone(OPERATING_ZONE).toLocalDate()));
+        yield new Outcome(movementId, Map.of("movementId", movementId.toString()));
       }
       case "CLOSE_SHIFT" -> {
         var close = shifts.close(new CloseShiftCommand(batch.tenantId(), batch.locationId(),
             uuid(payload.get("shiftId")), ((Number) payload.get("countedCashPesos")).longValue(),
             payload.get("expectedPesos") == null ? null
                 : ((Number) payload.get("expectedPesos")).longValue(),
-            operation.userId()));
+            operation.userId(), toBreakdown(payload.get("countedBreakdown")),
+            (String) payload.get("closeNote")));
         yield new Outcome(close.shiftId(), Map.of(
             "shiftId", close.shiftId().toString(),
             "expectedPesos", close.expectedPesos(),
@@ -187,6 +234,18 @@ public class SyncService {
       default -> throw new IllegalStateException("Tipo de operacion no soportado: "
           + operation.type());
     };
+  }
+
+  private Map<Integer, Integer> toBreakdown(Object raw) {
+    if (!(raw instanceof Map<?, ?> map) || map.isEmpty()) {
+      return null;
+    }
+    var result = new java.util.LinkedHashMap<Integer, Integer>();
+    for (var entry : map.entrySet()) {
+      result.put(Integer.parseInt(String.valueOf(entry.getKey())),
+          ((Number) entry.getValue()).intValue());
+    }
+    return result;
   }
 
   @SuppressWarnings("unchecked")

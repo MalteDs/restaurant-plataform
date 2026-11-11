@@ -1,5 +1,6 @@
 package com.caja.synchronization;
 
+import com.caja.shifts.ShiftApplicationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,6 +36,7 @@ class SyncIT {
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate jdbc;
   @Autowired ObjectMapper json;
+  @Autowired ShiftApplicationService shifts;
 
   @Test void retryReturnsSameSale() throws Exception {
     var ctx = fixture();
@@ -155,6 +157,200 @@ class SyncIT {
         Instant.now())));
     assertEquals("APPLIED", syncStatus(good.get(0)));
     assertEquals(1, countSales(ctx));
+  }
+
+  @Test void cashExpenseCreatesMovementAndExpense() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-expense", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(45000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(1, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ? "
+        + "and voided_at is null", Integer.class, ctx.tenantId()));
+    var expense = jdbc.queryForMap("select category, amount_pesos, cash_movement_id from expenses "
+        + "where tenant_id = ?", ctx.tenantId());
+    assertEquals("Fruver", expense.get("category"));
+    assertEquals(5000L, ((Number) expense.get("amount_pesos")).longValue());
+    assertTrue(expense.get("cash_movement_id") != null);
+  }
+
+  @Test void cashMovementWithoutExpenseDoesNotCreateExpense() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-deposit", 1,
+        "DEPOSIT", 10000, "fondo adicional", null, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(60000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from expenses where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
+  @Test void cashMovementRequiresReason() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-short", 1,
+        "WITHDRAWAL", 5000, "abcd", null, Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
+  @Test void cashMovementRequiresOpenShift() throws Exception {
+    var ctx = fixture();
+    jdbc.update("update shifts set closed_at = now() where id = ?", ctx.shiftId());
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-closed", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+  }
+
+  @Test void legacyCashMovementWithoutExpenseStillApplies() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-legacy-cash", 1,
+        "DEPOSIT", 5000, "cambio", null, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(55000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from expenses where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
+  @Test void cashExpenseCategoryMustBeValid() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(cashMovementOperation(ctx, "op-long-category", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "x".repeat(101), Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ?",
+        Integer.class, ctx.tenantId()));
+  }
+
+  @Test void correctionVoidsOldAndCreatesNew() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    category(ctx, "Aseo");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-m1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-m2", 2, oldId,
+        "WITHDRAWAL", 3000, "compra lechuga", "Aseo", false, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(second.get(0)));
+    assertEquals(47000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(1, jdbc.queryForObject("select count(*) from cash_movements where id = ? "
+        + "and voided_at is not null", Integer.class, oldId));
+    assertEquals(1, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is null and category = 'Aseo'", Integer.class, ctx.tenantId()));
+    assertEquals(1, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is not null and category = 'Fruver'", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void voidRestoresExpectedCash() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-void-1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-void-2", 2, oldId,
+        null, 0, null, null, true, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(second.get(0)));
+    assertEquals(50000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ? "
+        + "and voided_at is null", Integer.class, ctx.tenantId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from expenses where tenant_id = ? "
+        + "and voided_at is null", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void correctionWithoutOriginalStillCreatesNew() throws Exception {
+    var ctx = fixture();
+    var missing = UUID.randomUUID();
+    var result = push(ctx, List.of(correctionOperation(ctx, "op-missing", 1, missing,
+        "DEPOSIT", 2000, "reposicion", null, false, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(52000L, shifts.expectedCash(ctx.tenantId(), ctx.locationId(), ctx.shiftId()));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where id = ?",
+        Integer.class, missing));
+  }
+
+  @Test void correctionOnClosedShiftIsRejected() throws Exception {
+    var ctx = fixture();
+    category(ctx, "Fruver");
+    var first = push(ctx, List.of(cashMovementOperation(ctx, "op-closed-1", 1,
+        "WITHDRAWAL", 5000, "compra lechuga", "Fruver", Instant.now())));
+    var oldId = UUID.fromString((String) result(first.get(0), "movementId"));
+    jdbc.update("update shifts set closed_at = now() where id = ?", ctx.shiftId());
+
+    var second = push(ctx, List.of(correctionOperation(ctx, "op-closed-2", 2, oldId,
+        "WITHDRAWAL", 3000, "compra lechuga", "Aseo", false, Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(second.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from cash_movements where tenant_id = ? "
+        + "and voided_at is not null", Integer.class, ctx.tenantId()));
+  }
+
+  @Test void closeStoresBreakdownAndNote() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close", 1, 43000, 43000,
+        Map.of(20000, 2, 1000, 3), "faltante revisado", Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals("2", jdbc.queryForObject("select counted_breakdown->>'20000' from shifts "
+        + "where id = ?", String.class, ctx.shiftId()));
+    assertEquals("faltante revisado", jdbc.queryForObject("select close_note from shifts "
+        + "where id = ?", String.class, ctx.shiftId()));
+  }
+
+  @Test void breakdownMustMatchCounted() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-bad-sum", 1, 42000, 42000,
+        Map.of(20000, 2, 1000, 3), "faltante", Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+    assertEquals(0, jdbc.queryForObject("select count(*) from shifts where id = ? "
+        + "and closed_at is not null", Integer.class, ctx.shiftId()));
+  }
+
+  @Test void invalidDenominationIsRejected() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-bad-den", 1, 1234, 1234,
+        Map.of(1234, 1), null, Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+  }
+
+  @Test void shortCloseNoteIsRejected() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-short-note", 1, 49000, 49000,
+        null, "abc", Instant.now())));
+
+    assertEquals("REJECTED", syncStatus(result.get(0)));
+  }
+
+  @Test void legacyCloseWithoutBreakdownStillApplies() throws Exception {
+    var ctx = fixture();
+    var result = push(ctx, List.of(closeOperation(ctx, "op-close-legacy", 1, 50000, 50000,
+        null, null, Instant.now())));
+
+    assertEquals("APPLIED", syncStatus(result.get(0)));
+    assertEquals(50000L, jdbc.queryForObject("select counted_cash_pesos from shifts where id = ?",
+        Long.class, ctx.shiftId()));
+  }
+
+  @Test void serverExpectedDivergenceIsStored() throws Exception {
+    var ctx = fixture();
+    push(ctx, List.of(closeOperation(ctx, "op-close-diff", 1, 49000, 49000, null, null,
+        Instant.now())));
+    var row = jdbc.queryForMap("select expected_local_pesos, expected_server_pesos, "
+        + "difference_pesos from shifts where id = ?", ctx.shiftId());
+    assertEquals(49000L, ((Number) row.get("expected_local_pesos")).longValue());
+    assertEquals(50000L, ((Number) row.get("expected_server_pesos")).longValue());
+    assertEquals(-1000L, ((Number) row.get("difference_pesos")).longValue());
   }
 
   @Test void refundWithShortReasonIsRejectedThroughSync() throws Exception {
@@ -299,6 +495,88 @@ class SyncIT {
     return new SyncOperation(id, seq, "REFUND_SALE", saleId, ctx.userId(), clientCreatedAt,
         Map.of("shiftId", ctx.shiftId().toString(), "saleId", saleId.toString(),
             "method", "CASH", "reason", reason));
+  }
+
+  private UUID category(Ctx ctx, String name) {
+    var id = UUID.randomUUID();
+    jdbc.update("insert into expense_categories(id, tenant_id, location_id, name, sort_order) "
+        + "values (?, ?, ?, ?, 0)", id, ctx.tenantId(), ctx.locationId(), name);
+    return id;
+  }
+
+  private SyncOperation cashMovementOperation(Ctx ctx, String operationId, long seq, String type,
+                                              long amountPesos, String reason,
+                                              String expenseCategoryName,
+                                              Instant clientCreatedAt) {
+    return cashMovementOperation(ctx, operationId, seq, type, amountPesos, reason,
+        expenseCategoryName, null, false, clientCreatedAt);
+  }
+
+  private SyncOperation cashMovementOperation(Ctx ctx, String operationId, long seq, String type,
+                                              long amountPesos, String reason,
+                                              String expenseCategoryName,
+                                              UUID replacesMovementId, boolean voided,
+                                              Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var movementId = UUID.randomUUID();
+    var payload = new java.util.HashMap<String, Object>();
+    payload.put("shiftId", ctx.shiftId().toString());
+    payload.put("movementType", type);
+    payload.put("amountPesos", amountPesos);
+    payload.put("reason", reason);
+    if (expenseCategoryName != null) {
+      payload.put("expenseCategoryName", expenseCategoryName);
+    }
+    if (replacesMovementId != null) {
+      payload.put("replacesMovementId", replacesMovementId.toString());
+    }
+    if (voided) {
+      payload.put("voided", true);
+    }
+    return new SyncOperation(id, seq, "CASH_MOVEMENT", movementId, ctx.userId(), clientCreatedAt,
+        payload);
+  }
+
+  private SyncOperation correctionOperation(Ctx ctx, String operationId, long seq,
+                                            UUID replacesMovementId, String type,
+                                            long amountPesos, String reason,
+                                            String expenseCategoryName, boolean voided,
+                                            Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var movementId = UUID.randomUUID();
+    var payload = new java.util.HashMap<String, Object>();
+    payload.put("shiftId", ctx.shiftId().toString());
+    payload.put("replacesMovementId", replacesMovementId.toString());
+    if (voided) {
+      payload.put("voided", true);
+    } else {
+      payload.put("movementType", type);
+      payload.put("amountPesos", amountPesos);
+      payload.put("reason", reason);
+      if (expenseCategoryName != null) {
+        payload.put("expenseCategoryName", expenseCategoryName);
+      }
+    }
+    return new SyncOperation(id, seq, "CASH_MOVEMENT", movementId, ctx.userId(), clientCreatedAt,
+        payload);
+  }
+
+  private SyncOperation closeOperation(Ctx ctx, String operationId, long seq, long counted,
+                                       long expectedLocal, Map<Integer, Integer> breakdown,
+                                       String note, Instant clientCreatedAt) {
+    var id = UUID.nameUUIDFromBytes(operationId.getBytes(StandardCharsets.UTF_8));
+    var payload = new java.util.HashMap<String, Object>();
+    payload.put("shiftId", ctx.shiftId().toString());
+    payload.put("countedCashPesos", counted);
+    payload.put("expectedPesos", expectedLocal);
+    if (breakdown != null) {
+      payload.put("countedBreakdown", breakdown);
+    }
+    if (note != null) {
+      payload.put("closeNote", note);
+    }
+    return new SyncOperation(id, seq, "CLOSE_SHIFT", ctx.shiftId(), ctx.userId(),
+        clientCreatedAt, payload);
   }
 
   @SuppressWarnings("unchecked")

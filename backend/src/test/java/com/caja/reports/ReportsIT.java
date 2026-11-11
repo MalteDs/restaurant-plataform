@@ -5,6 +5,7 @@ import com.caja.shifts.ShiftApplicationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -122,6 +124,24 @@ class ReportsIT {
         .andExpect(status().isBadRequest());
   }
 
+  @Test void cashierCannotReadSummary() throws Exception {
+    var ctx = fixture();
+
+    mvc.perform(get("/api/reports/summary")
+            .header("Authorization", "Bearer " + token(ctx, "cajero_resumen", "CASHIER")))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test void cashierCanReadExpenseCategories() throws Exception {
+    var ctx = fixture();
+    createCategory(ctx, "Fruver", "admin_categorias");
+
+    mvc.perform(get("/api/expenses/categories")
+            .header("Authorization", "Bearer " + token(ctx, "cajero_categorias", "CASHIER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").exists());
+  }
+
   @Test void legacyCategoryTextStillWorks() throws Exception {
     var ctx = fixture();
 
@@ -158,6 +178,20 @@ class ReportsIT {
         .filter(row -> "Transporte".equals(row.get("name"))).findFirst().orElseThrow()
         .get("amountPesos")).longValue());
     assertTrue(grouped.stream().noneMatch(row -> "Mercado".equals(row.get("name"))));
+  }
+
+  @Test void summaryExcludesVoidedExpenses() throws Exception {
+    var ctx = fixture();
+    expense(ctx, 10000);
+    var voidedId = UUID.randomUUID();
+    jdbc.update("insert into expenses(id, tenant_id, location_id, user_id, category, description, "
+        + "amount_pesos, expense_date, voided_at, voided_by) values (?, ?, ?, ?, 'Aseo', 'Jabon', "
+        + "5000, current_date, now(), ?)", voidedId, ctx.tenantId(), ctx.locationId(), ctx.userId(),
+        ctx.userId());
+
+    assertEquals(10000, summary(ctx).get("expensesPesos"));
+    assertTrue(((List<?>) summary(ctx).get("byExpenseCategory")).stream()
+        .noneMatch(row -> "Aseo".equals(((Map<?, ?>) row).get("name"))));
   }
 
   @Test void refundsAndExpensesAreAudited() throws Exception {

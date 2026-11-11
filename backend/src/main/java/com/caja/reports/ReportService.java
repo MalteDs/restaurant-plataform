@@ -43,6 +43,7 @@ public class ReportService {
     var expensesPesos = total("""
         select coalesce(sum(amount_pesos), 0) from expenses
         where tenant_id = ? and location_id = ? and expense_date between ? and ?
+          and voided_at is null
         """, tenantId, locationId, from, to);
     var costPesos = total("""
         select coalesce(sum(coalesce(si.cost_pesos, 0) * si.quantity), 0)
@@ -104,6 +105,7 @@ public class ReportService {
         select category, coalesce(sum(amount_pesos), 0) as total
         from expenses
         where tenant_id = ? and location_id = ? and expense_date between ? and ?
+          and voided_at is null
         group by category
         order by total desc
         """, (rs, rowNum) -> new ExpenseCategoryRow(rs.getString("category"),

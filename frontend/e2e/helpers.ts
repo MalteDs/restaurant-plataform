@@ -31,7 +31,7 @@ export async function openShift(page: Page, amount: number) {
   await page.getByRole('link', { name: /^caja$/i }).click()
   await page.getByLabel(/fondo inicial/i).fill(String(amount))
   await page.getByRole('button', { name: /abrir turno/i }).click()
-  await expect(page.getByText(/turno abierto/i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('expected')).toBeVisible({ timeout: 10_000 })
 }
 
 export async function confirmAddIfPresent(page: Page) {
@@ -50,9 +50,19 @@ export async function sell(page: Page, product: string) {
   await expect(page.getByText(/venta ALM-[A-Z0-9]+-\d+ guardada/i)).toBeVisible({ timeout: 10_000 })
 }
 
-export async function closeShift(page: Page, counted: number) {
+export async function closeShift(
+  page: Page,
+  breakdown: Record<number, number>,
+  note?: string
+) {
   await page.getByRole('link', { name: /^caja$/i }).click()
-  await page.getByLabel(/efectivo contado/i).fill(String(counted))
+  for (const [denomination, count] of Object.entries(breakdown)) {
+    const formatted = Number(denomination).toLocaleString('es-CO').replace(/\./g, '\\.')
+    await page.getByLabel(new RegExp(`^Cantidad de ${formatted}$`, 'i')).fill(String(count))
+  }
+  if (note) {
+    await page.getByLabel(/nota del cierre/i).fill(note)
+  }
   await page.getByRole('button', { name: /cerrar turno/i }).click()
 }
 

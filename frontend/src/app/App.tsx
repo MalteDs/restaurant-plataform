@@ -8,6 +8,7 @@ import RefundScreen from '../modules/refunds/RefundScreen'
 import ReportsScreen from '../modules/reports/ReportsScreen'
 import SaleScreen from '../modules/sales/SaleScreen'
 import { RequireAuth } from './routes/RequireAuth'
+import { RequireRole } from './routes/RequireRole'
 import { ShellLayout } from './routes/ShellLayout'
 
 export default function App() {
@@ -21,8 +22,12 @@ export default function App() {
           <Route path="/sale" element={<SaleScreen />} />
           <Route path="/orders" element={<RefundScreen />} />
           <Route path="/cash" element={<CashScreen />} />
-          <Route path="/reports" element={<ReportsScreen />} />
-          <Route path="/admin" element={<AdminScreen />} />
+          <Route element={<RequireRole roles={['MANAGER', 'ADMIN']} />}>
+            <Route path="/reports" element={<ReportsScreen />} />
+          </Route>
+          <Route element={<RequireRole roles={['ADMIN']} />}>
+            <Route path="/admin" element={<AdminScreen />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />

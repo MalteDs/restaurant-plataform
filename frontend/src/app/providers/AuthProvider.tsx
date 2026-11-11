@@ -4,6 +4,7 @@ import { request, SESSION_EXPIRED_EVENT } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
 import { activeUserId, saveOfflineSession, unlockOfflineSession } from '../../modules/auth/session'
 import { syncCatalog } from '../../application/use-cases/catalog/sync-catalog'
+import { refreshExpenseCategories } from '../../application/use-cases/expenses/expense-categories'
 
 export type Role = 'CASHIER' | 'MANAGER' | 'ADMIN'
 
@@ -73,6 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Keep the previous catalog if the snapshot cannot be downloaded.
       }
+      try {
+        await refreshExpenseCategories(db)
+      } catch {
+        // Keep the local categories if the server cannot be reached.
+      }
     },
     []
   )
@@ -81,7 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || !navigator.onLine) {
       return
     }
-    const refreshCatalog = () => void syncCatalog(db).catch(() => undefined)
+    const refreshCatalog = () => {
+      void syncCatalog(db).catch(() => undefined)
+      void refreshExpenseCategories(db).catch(() => undefined)
+    }
     refreshCatalog()
     const timer = window.setInterval(refreshCatalog, 30 * 60_000)
     return () => window.clearInterval(timer)

@@ -1,7 +1,7 @@
 # Estado de implementación — Caja v1
 
 **Última actualización:** 2026-11-10
-**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos implementados; prueba física pendiente.
+**Fase:** v1 + mejoras de operación + impresión de comprobante + detalle de pedidos + operación de caja implementados; prueba física pendiente.
 **Tarea en curso:** ninguna.
 **Último commit de implementación:** ver `git log -1` (detalle de pedidos).
 **Modelo de datos:** `docs/superpowers/specs/2026-11-06-modelo-datos-design.md` (aprobado 2026-11-06) + `docs/superpowers/specs/2026-11-09-mejoras-operacion-design.md`.
@@ -99,6 +99,39 @@
 - Filtros: **Hoy** por defecto, **7 días**, **Mes**, **Año**, **Todo** o rango **Desde/Hasta**, más estado y búsqueda por código; **Cargar más** de 50 en 50.
 - La venta devuelta muestra monto, medio, motivo y fecha, y ya no permite devolver otra vez.
 - Sin cambios de API ni dependencias nuevas; todo sigue offline con IndexedDB.
+
+## Caja: movimientos, gastos y cierre (2026-11-10)
+
+- [x] Tarea 1 — Esquema de caja y lectura de categorías
+- [x] Tarea 2 — Movimiento de efectivo y gasto de caja
+- [x] Tarea 3 — Corrección, anulación y reportes sin anulados
+- [x] Tarea 4 — Cierre con denominaciones y nota
+- [x] Tarea 5 — Esquema local y categorías sin conexión
+- [x] Tarea 6 — Movimiento, edición y anulación en el cliente
+- [x] Tarea 7 — Cierre por denominaciones y nota en el cliente
+- [x] Tarea 8 — Resumen local y CSV de cierre
+- [x] Tarea 9 — Pantalla de movimientos
+- [x] Tarea 10 — Cierre, historial y exportación
+- [x] Tarea 11 — E2E, documentación y verificación
+
+### Verificación
+
+- Backend: `./mvnw verify` → pruebas verdes, sin fallos.
+- Frontend: `npm test` → 116 pruebas, 0 fallos; `npm run build` correcto.
+- E2E: `e2e/cash-operations.spec.ts` y `e2e/offline.spec.ts` → 3 escenarios verdes.
+- Migración nueva: `025-caja-operacion`.
+
+### Notas de la iteración
+
+- Cualquier usuario autenticado opera Caja. Reportes y el formulario de gastos por fuera siguen siendo Encargado/Admin. Es una decisión explícita para los días en que el encargado de la sede no está. La restricción se aplica también en la ruta y en el endpoint del resumen.
+- La pantalla usa una sola acción **Registrar movimiento** con selector **Ingreso/Retiro** y casilla **Es gasto**; el resumen del turno muestra ingresos, retiros y gastos por separado.
+- Un gasto de caja es un retiro con categoría obligatoria. Crea el movimiento y el gasto en la misma operación de sincronización; el arqueo lee movimientos y la utilidad lee gastos, sin sumar dos veces.
+- Un movimiento se edita o anula solo con el turno abierto. La corrección no borra el histórico: anula el viejo con usuario y fecha y crea el nuevo. Un turno cerrado no se edita.
+- El cierre cuenta por denominaciones; el total se calcula. Si hay diferencia, la nota es obligatoria. El servidor no rechaza el cierre porque su esperado difiera del local: guarda ambos y marca la diferencia.
+- El CSV de cierre es local y reemplaza el Excel manual. El resumen diario y su exportación siguen en Reportes.
+- Las categorías se siembran en el dispositivo y se actualizan desde el servidor cuando hay conexión.
+- Límite conocido: el historial de turnos es del dispositivo. Ver turnos de otras cajas o sedes requiere un endpoint central y queda fuera.
+- Decisión pendiente con los dueños: cómo consolidan gastos y cierres entre las tres sedes.
 
 ## Notas de la sesión
 

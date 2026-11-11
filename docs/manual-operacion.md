@@ -14,6 +14,13 @@
 2. Ve a **Caja** y abre el turno con el fondo inicial en efectivo.
 3. Si el equipo es nuevo, un administrador debe registrarlo en **Administración → Dispositivos** desde ese mismo navegador. El token del dispositivo se guarda solo y es el que permite sincronizar.
 
+## Movimientos de caja
+
+- Con el turno abierto, toca **Registrar movimiento**, elige **Ingreso** o **Retiro**, y escribe monto y motivo (5 a 200 caracteres).
+- Para un gasto pagado con efectivo de la caja, elige **Retiro**, marca **Es gasto** y elige la categoría. El gasto baja el efectivo esperado y aparece en Reportes.
+- Un movimiento se puede **Editar** o **Anular** mientras el turno esté abierto. El movimiento viejo queda anulado con usuario y fecha; no se borra.
+- Al cerrar el turno ya no se edita ni se anula.
+
 ## Vender
 
 1. En **Venta**, toca los productos del catálogo local.
@@ -50,15 +57,18 @@
 
 ## Cerrar el turno
 
-1. Ve a **Caja** y escribe el efectivo contado.
-2. Toca **Cerrar turno**. La pantalla muestra el esperado y la diferencia.
-3. El esperado suma el fondo inicial, las porciones en efectivo de las ventas, los ingresos y resta las devoluciones en efectivo y los retiros. Los pagos con tarjeta o Bre-B no entran al arqueo.
-4. La diferencia se registra, no se corrige sola. Si es distinta de cero, revisa ventas y devoluciones en efectivo.
-5. Exporta el resumen del día con **Exportar CSV**.
+1. Ve a **Caja** y cuenta los billetes y monedas por denominación.
+2. El total contado se calcula solo. Si hay diferencia, escribe una nota de 5 a 200 caracteres.
+3. Toca **Cerrar turno**. La pantalla muestra el esperado, el contado y la diferencia.
+4. El esperado suma el fondo inicial, las porciones en efectivo de las ventas, los ingresos y resta las devoluciones en efectivo, los retiros y los gastos de caja. Los pagos con tarjeta o Bre-B no entran al arqueo.
+5. En **Turnos anteriores**, descarga el cierre en CSV con **Descargar cierre**.
+6. El resumen diario y su exportación viven en **Reportes**.
 
 ## Gastos y administración
 
-- **Reportes → Gastos** requiere conexión y rol gerente o administrador.
+- **Caja** la puede operar cualquier usuario autenticado: abrir, mover, editar, anular y cerrar.
+- **Reportes → Gastos** requiere conexión y rol gerente o administrador. Ahí se registran los gastos pagados por fuera de la caja.
+- Los gastos pagados con caja se registran desde **Caja** y aparecen en Reportes una vez sincronizados. Se editan o anulan desde Caja, no desde Reportes.
 - Cada gasto exige una categoría activa. El administrador las crea y activa en **Administración → Configuración → Categorías de gasto**.
 - El reporte muestra **Gastos por categoría** con el nombre con el que se registró cada gasto; renombrar una categoría no reescribe el histórico.
 - **Administración** (catálogo, usuarios, dispositivos, sede) requiere conexión y rol administrador.

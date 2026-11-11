@@ -45,7 +45,7 @@ public class ExpenseController {
   }
 
   @GetMapping("/categories")
-  @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
+  @PreAuthorize("isAuthenticated()")
   public List<ExpenseService.ExpenseCategory> categories(
       @AuthenticationPrincipal AuthenticatedUser user) {
     return expenses.categories(user.tenantId(), user.locationId());
