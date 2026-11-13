@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { db, type CajaDb, type ModifierGroupRow, type ModifierRow, type ProductRow } from '../../infrastructure/database/schema'
+import { db, type AddonRow, type CajaDb, type ProductRow, type SaleAddonRow } from '../../infrastructure/database/schema'
 import { createSale, lineTotal, type CreatedSale, type SaleInput } from '../../application/use-cases/sales/create-sale'
 import { useAuth } from '../../app/providers/AuthProvider'
 import { Button, Card, FormError, Input, Modal, PageHeader } from '../../shared/ui'
 import { addToCart, type CartLine } from './cart-lines'
 import { buildProductFamilies, type ProductFamily } from './product-families'
-import { isProductSellable } from './sale-days'
+import { effectivePrice, isProductSellable } from './sale-days'
 import { printReceipt } from '../printing/receipt'
 
 type PaymentMethod = SaleInput['payments'][number]['method']
@@ -35,7 +35,7 @@ export default function SaleScreen({
   const { user } = useAuth()
   const canOverride = user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const [products, setProducts] = useState<ProductRow[]>([])
-  const [groups, setGroups] = useState<ModifierGroupRow[]>([])
+  const [addons, setAddons] = useState<AddonRow[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
   const [type, setType] = useState<SaleInput['type']>('COUNTER')
   const [tableLabel, setTableLabel] = useState('')
@@ -52,7 +52,7 @@ export default function SaleScreen({
   const [partAmount, setPartAmount] = useState('')
   const [picking, setPicking] = useState<ProductRow | null>(null)
   const [pickingFamily, setPickingFamily] = useState<ProductFamily | null>(null)
-  const [selected, setSelected] = useState<Record<string, ModifierRow[]>>({})
+  const [selected, setSelected] = useState<Record<string, number>>({})
   const [priceLine, setPriceLine] = useState<CartLine | null>(null)
   const [priceValue, setPriceValue] = useState('')
   const [priceReason, setPriceReason] = useState('')
@@ -69,7 +69,7 @@ export default function SaleScreen({
 
   useEffect(() => {
     void database.products.toArray().then((rows) => setProducts(rows.filter((row) => row.active)))
-    void database.modifierGroups.toArray().then(setGroups)
+    void database.addons.toArray().then(setAddons)
   }, [database])
 
   useEffect(() => {
@@ -112,18 +112,24 @@ export default function SaleScreen({
     unitPricePesos: line.unitPricePesos,
     catalogUnitPricePesos: line.catalogUnitPricePesos,
     costPesos: line.product.costPesos,
-    modifiers: line.modifiers,
+    addons: line.addons,
     components: line.product.components
   }), 0) + (type === 'DELIVERY' ? deliveryFee : 0)
   const remaining = total - parts.reduce((sum, part) => sum + part.amountPesos, 0)
   const received = Number(cashReceived)
 
-  function addLine(product: ProductRow, modifiers: ModifierRow[]) {
-    setCart((current) => addToCart(current, product, modifiers))
+  function availableAddons(product: ProductRow): AddonRow[] {
+    return addons.filter((addon) =>
+      addon.active !== false && (product.addonIds ?? []).includes(addon.id))
+  }
+
+  function addLine(product: ProductRow, selectedAddons: SaleAddonRow[]) {
+    setCart((current) => addToCart(current, product, selectedAddons,
+      effectivePrice(product, now)))
   }
 
   function pick(product: ProductRow) {
-    if (product.modifierGroupIds.length === 0) {
+    if (availableAddons(product).length === 0) {
       addLine(product, [])
       return
     }
@@ -148,29 +154,33 @@ export default function SaleScreen({
     setCart((current) => current.filter((line) => line.key !== key))
   }
 
-  function toggleModifier(group: ModifierGroupRow, modifier: ModifierRow) {
-    setSelected((current) => {
-      const chosen = current[group.id] ?? []
-      if (chosen.some((item) => item.id === modifier.id)) {
-        return { ...current, [group.id]: chosen.filter((item) => item.id !== modifier.id) }
-      }
-      if (chosen.length >= group.maxSelection) {
-        return current
-      }
-      return { ...current, [group.id]: [...chosen, modifier] }
-    })
+  function toggleAddon(addon: AddonRow) {
+    setSelected((current) => ({
+      ...current,
+      [addon.id]: current[addon.id] ? 0 : 1
+    }))
   }
 
-  function confirmModifiers() {
+  function changeAddonQuantity(addon: AddonRow, delta: number) {
+    setSelected((current) => ({
+      ...current,
+      [addon.id]: Math.max(0, Math.min(99, (current[addon.id] ?? 0) + delta))
+    }))
+  }
+
+  function confirmAddons() {
     if (!picking) {
       return
     }
-    const productGroups = groups.filter((group) => picking.modifierGroupIds.includes(group.id))
-    const valid = productGroups.every((group) => (selected[group.id]?.length ?? 0) >= group.minSelection)
-    if (!valid) {
-      return
-    }
-    addLine(picking, productGroups.flatMap((group) => selected[group.id] ?? []))
+    const chosen: SaleAddonRow[] = availableAddons(picking)
+      .filter((addon) => (selected[addon.id] ?? 0) > 0)
+      .map((addon) => ({
+        id: addon.id,
+        name: addon.name,
+        pricePesos: addon.pricePesos,
+        quantity: selected[addon.id]
+      }))
+    addLine(picking, chosen)
     setPicking(null)
     setSelected({})
   }
@@ -308,7 +318,7 @@ export default function SaleScreen({
           catalogUnitPricePesos: line.catalogUnitPricePesos,
           overrideReason: line.overrideReason,
           costPesos: line.product.costPesos,
-          modifiers: line.modifiers,
+          addons: line.addons,
           components: line.product.components
         }))
       })
@@ -326,9 +336,7 @@ export default function SaleScreen({
     }
   }
 
-  const pickingGroups = picking
-    ? groups.filter((group) => picking.modifierGroupIds.includes(group.id))
-    : []
+  const pickingAddons = picking ? availableAddons(picking) : []
 
   function scrollToCategory(category: string) {
     if (query.trim() !== '') {
@@ -391,7 +399,10 @@ export default function SaleScreen({
                   </h2>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {families.map((family) => {
-                      const price = family.variants[0]?.product.pricePesos ?? 0
+                      const price = family.variants.length > 0
+                        ? Math.min(...family.variants.map((variant) =>
+                          effectivePrice(variant.product, now)))
+                        : 0
                       return (
                         <button
                           key={family.key}
@@ -454,14 +465,16 @@ export default function SaleScreen({
                         <p className="truncate text-sm font-medium text-gray-900">
                           {line.product.name}
                         </p>
-                        {line.modifiers.length > 0 ? (
+                        {line.addons.length > 0 ? (
                           <p className="text-xs text-gray-500">
-                            {line.modifiers.map((modifier) => modifier.name).join(' · ')}
+                            {line.addons.map((addon) =>
+                              `${addon.quantity} × ${addon.name}`).join(' · ')}
                           </p>
                         ) : null}
                         <p className="text-xs text-gray-500">
                           ${(line.unitPricePesos
-                            + line.modifiers.reduce((sum, m) => sum + m.additionalPricePesos, 0)
+                            + line.addons.reduce((sum, addon) =>
+                              sum + addon.pricePesos * addon.quantity, 0)
                           ).toLocaleString('es-CO')} c/u
                         </p>
                         {line.unitPricePesos !== line.catalogUnitPricePesos ? (
@@ -708,7 +721,7 @@ export default function SaleScreen({
                   {variant.label}
                 </span>
                 <span className="text-sm text-brand-600">
-                  ${variant.product.pricePesos.toLocaleString('es-CO')}
+                  ${effectivePrice(variant.product, now).toLocaleString('es-CO')}
                 </span>
               </button>
             ))}
@@ -720,29 +733,42 @@ export default function SaleScreen({
       ) : null}
 
       {picking ? (
-        <Modal title={`Modificadores de ${picking.name}`} onClose={() => setPicking(null)}>
-          <div className="space-y-4">
-            {pickingGroups.map((group) => (
-              <section key={group.id}>
-                <p className="text-sm font-medium text-gray-700">
-                  {group.name} (mín {group.minSelection}, máx {group.maxSelection})
-                </p>
-                {group.modifiers.map((modifier) => (
-                  <label key={modifier.id} className="mt-1 flex items-center gap-2 text-sm">
+        <Modal title={`Adicionales de ${picking.name}`} onClose={() => setPicking(null)}>
+          <div className="space-y-3">
+            {pickingAddons.map((addon) => {
+              const quantity = selected[addon.id] ?? 0
+              return (
+                <div key={addon.id} className="flex items-center justify-between gap-2 text-sm">
+                  <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={(selected[group.id] ?? []).some((item) => item.id === modifier.id)}
-                      onChange={() => toggleModifier(group, modifier)}
+                      checked={quantity > 0}
+                      onChange={() => toggleAddon(addon)}
                     />
-                    {modifier.name} +${modifier.additionalPricePesos.toLocaleString('es-CO')}
+                    {addon.name} +${addon.pricePesos.toLocaleString('es-CO')}
                   </label>
-                ))}
-              </section>
-            ))}
+                  {quantity > 0 ? (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" className="px-2 py-1"
+                        aria-label={`Quitar ${addon.name}`}
+                        onClick={() => changeAddonQuantity(addon, -1)}>
+                        −
+                      </Button>
+                      <span className="w-6 text-center">{quantity}</span>
+                      <Button variant="ghost" className="px-2 py-1"
+                        aria-label={`Agregar ${addon.name}`}
+                        onClick={() => changeAddonQuantity(addon, 1)}>
+                        +
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setPicking(null)}>Cancelar</Button>
-            <Button onClick={confirmModifiers}>Agregar</Button>
+            <Button onClick={confirmAddons}>Agregar</Button>
           </div>
         </Modal>
       ) : null}

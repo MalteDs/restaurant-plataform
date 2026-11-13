@@ -63,6 +63,32 @@ class CatalogAdminIT {
     assertFalse(publicGroupNames().contains("GRUPO INACTIVO"));
   }
 
+  @Test void createsAddonWithRecipeAndIngredient() throws Exception {
+    var ingredientId = createIngredient("TOCINETA RECETA", "GRAM", 5);
+    createAddon("TOCINETA EXTRA", 5000, ingredientId, 30);
+
+    var snapshot = snapshot("/api/catalog/admin");
+    var addon = ((List<Map<String, Object>>) snapshot.get("addons")).stream()
+        .filter(row -> "TOCINETA EXTRA".equals(row.get("name"))).findFirst().orElseThrow();
+    assertEquals(5000, ((Number) addon.get("pricePesos")).longValue());
+    var recipe = (List<Map<String, Object>>) addon.get("recipe");
+    assertEquals(30.0, ((Number) recipe.get(0).get("quantity")).doubleValue());
+
+    var ingredient = ((List<Map<String, Object>>) snapshot.get("ingredients")).stream()
+        .filter(row -> "TOCINETA RECETA".equals(row.get("name"))).findFirst().orElseThrow();
+    assertEquals("GRAM", ingredient.get("unit"));
+    assertEquals(5.0, ((Number) ingredient.get("wastePercent")).doubleValue());
+  }
+
+  @Test void inactiveAddonLeavesThePublicSnapshot() throws Exception {
+    var ingredientId = createIngredient("QUESO RECETA", "UNIT", 0);
+    var addonId = createAddon("QUESO EXTRA INACTIVO", 3000, ingredientId, 1);
+    updateAddon(addonId, false);
+
+    assertFalse(names(snapshot("/api/catalog"), "addons").contains("QUESO EXTRA INACTIVO"));
+    assertTrue(names(snapshot("/api/catalog/admin"), "addons").contains("QUESO EXTRA INACTIVO"));
+  }
+
   @Test void reactivatesProductForSaleSnapshot() throws Exception {
     var productId = createProduct("PRODUCTO REACTIVABLE", 10000);
     updateProductActive(productId, false);
@@ -90,6 +116,36 @@ class CatalogAdminIT {
                 "pricePesos", 10000,
                 "modifierGroupIds", List.of(UUID.randomUUID())))))
         .andExpect(status().isBadRequest());
+  }
+
+  private UUID createIngredient(String name, String unit, double wastePercent) throws Exception {
+    var body = mvc.perform(post("/api/catalog/ingredients").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken())
+            .content(json.writeValueAsString(Map.of(
+                "name", name, "unit", unit, "wastePercent", wastePercent))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private UUID createAddon(String name, long pricePesos, UUID ingredientId, double quantity)
+      throws Exception {
+    var body = mvc.perform(post("/api/catalog/addons").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken())
+            .content(json.writeValueAsString(Map.of(
+                "name", name,
+                "pricePesos", pricePesos,
+                "recipe", List.of(Map.of("ingredientId", ingredientId, "quantity", quantity))))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private void updateAddon(UUID id, boolean active) throws Exception {
+    mvc.perform(put("/api/catalog/addons/" + id).contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken())
+            .content(json.writeValueAsString(Map.of("active", active))))
+        .andExpect(status().isNoContent());
   }
 
   private UUID createProduct(String name, long pricePesos) throws Exception {

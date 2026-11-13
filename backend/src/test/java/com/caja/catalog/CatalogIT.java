@@ -60,6 +60,62 @@ class CatalogIT {
     assertEquals(3, groups.size());
   }
 
+  @Test void createsProductWithAddonsDayPricesAndRecipe() throws Exception {
+    var ingredientId = ingredient("CARNE COMPLETA", "UNIT", 0);
+    var addonId = addon("TOCINETA COMPLETA", 5000, ingredientId, 30);
+
+    var request = Map.of(
+        "name", "HAMBURGUESA COMPLETA",
+        "pricePesos", 20000,
+        "saleDays", List.of(1, 2, 3, 4),
+        "addonIds", List.of(addonId),
+        "dayPrices", List.of(Map.of("weekday", 1, "pricePesos", 18000)),
+        "recipe", List.of(Map.of("ingredientId", ingredientId, "quantity", 120)));
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_producto_completo"))
+            .content(json.writeValueAsString(request)))
+        .andExpect(status().isCreated());
+
+    var product = product(snapshot(), "HAMBURGUESA COMPLETA");
+    assertEquals(List.of(1, 2, 3, 4), product.get("saleDays"));
+    assertEquals(List.of(addonId.toString()), product.get("addonIds"));
+    assertEquals(18000, ((Number) ((List<Map<String, Object>>) product.get("dayPrices"))
+        .get(0).get("pricePesos")).longValue());
+    assertEquals(120.0, ((Number) ((List<Map<String, Object>>) product.get("recipe"))
+        .get(0).get("quantity")).doubleValue());
+  }
+
+  @Test void createsComboWithComponentsAndRejectsBadCompositions() throws Exception {
+    var sencilla = productId("SENCILLA");
+    var papas = productId("PAPAS A LA FRANCESA");
+    var combo = Map.of(
+        "name", "COMBO PRUEBA",
+        "pricePesos", 25000,
+        "kind", "COMBO",
+        "components", List.of(
+            Map.of("productId", sencilla, "quantity", 2),
+            Map.of("productId", papas, "quantity", 1)));
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_combo"))
+            .content(json.writeValueAsString(combo)))
+        .andExpect(status().isCreated());
+    assertEquals(2, ((List<?>) product(snapshot(), "COMBO PRUEBA").get("components")).size());
+
+    var emptyCombo = Map.of(
+        "name", "COMBO VACIO", "pricePesos", 1000, "kind", "COMBO", "components", List.of());
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_combo_malo"))
+            .content(json.writeValueAsString(emptyCombo)))
+        .andExpect(status().isBadRequest());
+
+    var missingComponents = Map.of(
+        "name", "COMBO SIN COMPONENTES", "pricePesos", 1000, "kind", "COMBO");
+    mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_combo_sin"))
+            .content(json.writeValueAsString(missingComponents)))
+        .andExpect(status().isBadRequest());
+  }
+
   @Test void rejectsNegativePriceAndBlankName() throws Exception {
     mvc.perform(post("/api/catalog/products").contentType(MediaType.APPLICATION_JSON)
             .header("Authorization", "Bearer " + adminToken("admin_catalogo"))
@@ -123,6 +179,33 @@ class CatalogIT {
 
   private List<Map<String, Object>> categories(Map<String, Object> snapshot) {
     return (List<Map<String, Object>>) snapshot.get("categories");
+  }
+
+  private UUID ingredient(String name, String unit, double wastePercent) throws Exception {
+    var body = mvc.perform(post("/api/catalog/ingredients").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_ingrediente"))
+            .content(json.writeValueAsString(Map.of(
+                "name", name, "unit", unit, "wastePercent", wastePercent))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private UUID addon(String name, long pricePesos, UUID ingredientId, double quantity)
+      throws Exception {
+    var body = mvc.perform(post("/api/catalog/addons").contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer " + adminToken("admin_adicional"))
+            .content(json.writeValueAsString(Map.of(
+                "name", name,
+                "pricePesos", pricePesos,
+                "recipe", List.of(Map.of("ingredientId", ingredientId, "quantity", quantity))))))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+    return UUID.fromString((String) json.readValue(body, Map.class).get("id"));
+  }
+
+  private UUID productId(String name) throws Exception {
+    return UUID.fromString(String.valueOf(product(snapshot(), name).get("id")));
   }
 
   private Map<String, Object> product(Map<String, Object> snapshot, String name) {

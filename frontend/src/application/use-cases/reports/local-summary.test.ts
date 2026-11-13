@@ -102,6 +102,21 @@ it('reporta todas las ventas locales y solo toma los gastos del servidor', async
   expect(summary.operatingProfitPesos).toBe(31500)
 })
 
+it('conserva el consumo de ingredientes y la cobertura del servidor', async () => {
+  const db = await seed()
+
+  const summary = await dailySummary(db, '2026-11-01', async () => ({
+    expensesPesos: 0,
+    byIngredient: [{ name: 'Carne', unit: 'UNIT', quantity: 42, wastePercent: 5 }],
+    recipeCoveragePercent: 62.5
+  }))
+
+  expect(summary.byIngredient).toEqual([
+    { name: 'Carne', unit: 'UNIT', quantity: 42, wastePercent: 5 }
+  ])
+  expect(summary.recipeCoveragePercent).toBe(62.5)
+})
+
 it('mantiene las ventas locales si el servidor no responde', async () => {
   const db = await seed()
 

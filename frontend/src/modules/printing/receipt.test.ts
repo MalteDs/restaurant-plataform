@@ -47,7 +47,7 @@ function item(overrides: Partial<SaleItemRow> = {}): SaleItemRow {
     unitPricePesos: 8000,
     costPesos: null,
     lineTotalPesos: 18000,
-    modifiers: [{ id: 'm1', name: 'Queso', additionalPricePesos: 1000 }],
+    addons: [{ id: 'a1', name: 'Tocineta', pricePesos: 5000, quantity: 2 }],
     components: [],
     note: 'Sin cebolla',
     lineNumber: 1,
@@ -81,7 +81,7 @@ it('incluye el detalle, los pagos y la sede', () => {
   const html = buildReceiptHtml(data())
   for (const text of [
     'KARBÓN', 'Almendros', 'Comprobante de venta', 'ALM-A-000123',
-    'SENCILLA', '2 x', '+ Queso', 'Nota: Sin cebolla', 'Envío',
+    'SENCILLA', '2 x', '2 × Tocineta', '$10.000', 'Nota: Sin cebolla', 'Envío',
     '$5.000', 'Total', '$23.000', 'Efectivo', '$10.000', 'Tarjeta', '$13.000'
   ]) {
     expect(html).toContain(text)

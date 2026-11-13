@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openDb, type CajaDb } from '../../../infrastructure/database/schema'
-import { createSale, nextDisplayCode, type SaleInput } from './create-sale'
+import { createSale, lineTotal, nextDisplayCode, type SaleInput } from './create-sale'
 
 const opened: CajaDb[] = []
 
@@ -47,12 +47,40 @@ function baseInput(): SaleInput {
         unitPricePesos: 16500,
         catalogUnitPricePesos: 16500,
         costPesos: null,
-        modifiers: [],
+        addons: [],
         components: []
       }
     ]
   }
 }
+
+it('cobra el adicional por su cantidad', () => {
+  const input = baseInput()
+  input.items[0].quantity = 1
+  input.items[0].addons = [{ id: 'a1', name: 'Tocineta', pricePesos: 5000, quantity: 2 }]
+  input.payments = [{ method: 'CASH', amountPesos: 26500 }]
+
+  expect(lineTotal(input.items[0])).toBe(26500)
+})
+
+it('envía los adicionales con la forma que espera el servidor', async () => {
+  const db = await seed()
+  const input = baseInput()
+  input.items[0].quantity = 1
+  input.items[0].addons = [{ id: 'a1', name: 'Tocineta', pricePesos: 5000, quantity: 2 }]
+  input.payments = [{ method: 'CASH', amountPesos: 26500 }]
+
+  await createSale(db, input)
+
+  const operation = (await db.operations.toArray())[0]
+  const item = (operation.payload as { items: Array<{ addons: unknown }> }).items[0]
+  expect(item.addons).toEqual([{
+    addonId: 'a1', addonName: 'Tocineta', additionalPricePesos: 5000, quantity: 2
+  }])
+  expect((await db.saleItems.toArray())[0].addons).toEqual([
+    { id: 'a1', name: 'Tocineta', pricePesos: 5000, quantity: 2 }
+  ])
+})
 
 it('guarda venta y operación en la misma transacción', async () => {
   const db = await seed()

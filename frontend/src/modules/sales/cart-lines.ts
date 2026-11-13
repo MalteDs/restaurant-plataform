@@ -1,4 +1,4 @@
-import type { ModifierRow, ProductRow } from '../../infrastructure/database/schema'
+import type { ProductRow, SaleAddonRow } from '../../infrastructure/database/schema'
 
 const MAX_QUANTITY = 99
 
@@ -9,25 +9,29 @@ export interface CartLine {
   unitPricePesos: number
   catalogUnitPricePesos: number
   overrideReason: string | null
-  modifiers: ModifierRow[]
+  addons: SaleAddonRow[]
 }
 
-function sameModifiers(left: ModifierRow[], right: ModifierRow[]): boolean {
-  const leftIds = left.map((modifier) => modifier.id).sort()
-  const rightIds = right.map((modifier) => modifier.id).sort()
-  return leftIds.length === rightIds.length &&
-    leftIds.every((id, index) => id === rightIds[index])
+function sameAddons(left: SaleAddonRow[], right: SaleAddonRow[]): boolean {
+  const ordered = (rows: SaleAddonRow[]) =>
+    [...rows].sort((a, b) => a.id.localeCompare(b.id))
+  const leftRows = ordered(left)
+  const rightRows = ordered(right)
+  return leftRows.length === rightRows.length &&
+    leftRows.every((row, index) =>
+      row.id === rightRows[index].id && row.quantity === rightRows[index].quantity)
 }
 
 export function addToCart(
   cart: CartLine[],
   product: ProductRow,
-  modifiers: ModifierRow[]
+  addons: SaleAddonRow[],
+  unitPricePesos: number
 ): CartLine[] {
   const existing = cart.find((line) =>
     line.product.id === product.id &&
     line.overrideReason === null &&
-    sameModifiers(line.modifiers, modifiers)
+    sameAddons(line.addons, addons)
   )
   if (existing) {
     return cart.map((line) => line.key === existing.key
@@ -38,9 +42,9 @@ export function addToCart(
     key: crypto.randomUUID(),
     product,
     quantity: 1,
-    unitPricePesos: product.pricePesos,
-    catalogUnitPricePesos: product.pricePesos,
+    unitPricePesos,
+    catalogUnitPricePesos: unitPricePesos,
     overrideReason: null,
-    modifiers
+    addons
   }]
 }

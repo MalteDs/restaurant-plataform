@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 027-product-day-prices
+      author: caja
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE product_day_prices (
+                product_id uuid NOT NULL,
+                weekday smallint NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+                price_pesos bigint NOT NULL CHECK (price_pesos >= 0),
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (product_id, weekday),
+                CONSTRAINT product_day_prices_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT product_day_prices_product_fk
+                  FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+              CREATE INDEX product_day_prices_product_idx
+                ON product_day_prices (tenant_id, location_id, product_id);

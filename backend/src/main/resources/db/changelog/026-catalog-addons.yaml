@@ -1,0 +1,95 @@
+databaseChangeLog:
+  - changeSet:
+      id: 026-catalog-addons
+      author: caja
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE addons (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                name varchar(100) NOT NULL CHECK (btrim(name) <> ''),
+                price_pesos bigint NOT NULL DEFAULT 0 CHECK (price_pesos >= 0),
+                active boolean NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz,
+                CONSTRAINT addons_location_name_uk UNIQUE (location_id, name),
+                CONSTRAINT addons_id_tenant_location_uk UNIQUE (id, tenant_id, location_id),
+                CONSTRAINT addons_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT
+              );
+
+              CREATE TABLE product_addons (
+                product_id uuid NOT NULL,
+                addon_id uuid NOT NULL,
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (product_id, addon_id),
+                CONSTRAINT product_addons_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT product_addons_product_fk FOREIGN KEY (product_id, tenant_id, location_id)
+                  REFERENCES products(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT product_addons_addon_fk FOREIGN KEY (addon_id, tenant_id, location_id)
+                  REFERENCES addons(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+              CREATE INDEX product_addons_addon_idx ON product_addons (addon_id);
+
+              CREATE TABLE sale_item_addons (
+                sale_item_id uuid NOT NULL,
+                addon_id uuid NOT NULL,
+                addon_name varchar(100) NOT NULL,
+                additional_price_pesos bigint NOT NULL CHECK (additional_price_pesos >= 0),
+                quantity int NOT NULL CHECK (quantity BETWEEN 1 AND 99),
+                tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                location_id uuid NOT NULL,
+                PRIMARY KEY (sale_item_id, addon_id),
+                CONSTRAINT sale_item_addons_location_fk FOREIGN KEY (location_id, tenant_id)
+                  REFERENCES locations(id, tenant_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_addons_item_fk FOREIGN KEY (sale_item_id, tenant_id, location_id)
+                  REFERENCES sale_items(id, tenant_id, location_id) ON DELETE RESTRICT,
+                CONSTRAINT sale_item_addons_addon_fk FOREIGN KEY (addon_id, tenant_id, location_id)
+                  REFERENCES addons(id, tenant_id, location_id) ON DELETE RESTRICT
+              );
+              CREATE INDEX sale_item_addons_addon_idx ON sale_item_addons (addon_id);
+
+              create temporary table _addon_candidates as
+              select m.id, m.tenant_id, m.location_id, m.name, m.additional_price_pesos,
+                     (m.active and g.active) as active,
+                     g.name as group_name,
+                     row_number() over (partition by m.location_id, m.name
+                                        order by m.additional_price_pesos desc, m.active desc,
+                                                 m.id) as rn
+              from modifiers m
+              join modifier_groups g
+                on g.id = m.modifier_group_id and g.tenant_id = m.tenant_id
+               and g.location_id = m.location_id;
+
+              create temporary table _addon_map(
+                modifier_id uuid primary key,
+                addon_id uuid not null
+              );
+
+              insert into _addon_map(modifier_id, addon_id)
+              select id, gen_random_uuid() from _addon_candidates;
+
+              insert into addons(id, tenant_id, location_id, name, price_pesos, active)
+              select map.addon_id, c.tenant_id, c.location_id,
+                     case when c.rn = 1 then left(c.name, 100)
+                          else left(c.name, greatest(0, 100 - length(' (' || c.group_name || ')')))
+                               || ' (' || left(c.group_name, 100) || ')' end,
+                     c.additional_price_pesos, c.active
+              from _addon_candidates c
+              join _addon_map map on map.modifier_id = c.id;
+
+              insert into product_addons(product_id, addon_id, tenant_id, location_id)
+              select distinct pmg.product_id, map.addon_id, pmg.tenant_id, pmg.location_id
+              from product_modifier_groups pmg
+              join modifiers m on m.modifier_group_id = pmg.modifier_group_id
+                and m.tenant_id = pmg.tenant_id and m.location_id = pmg.location_id
+              join _addon_map map on map.modifier_id = m.id
+              on conflict do nothing;
+
+              drop table _addon_map;
+              drop table _addon_candidates;

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { request } from '../../infrastructure/api/client'
 import { db } from '../../infrastructure/database/schema'
 import { bogotaDate } from '../../shared/dates'
@@ -9,10 +9,44 @@ import ReportsScreen from './ReportsScreen'
 vi.mock('../../infrastructure/api/client', () => ({ request: vi.fn() }))
 vi.mock('../expenses/ExpensesScreen', () => ({ default: () => null }))
 
+beforeEach(async () => {
+  await db.open()
+})
+
 afterEach(async () => {
   vi.restoreAllMocks()
   db.close()
   await db.delete()
+})
+
+it('muestra el consumo de ingredientes y advierte cobertura baja', async () => {
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  vi.mocked(request).mockResolvedValue({
+    expensesPesos: 0,
+    byIngredient: [{ name: 'Carne', unit: 'UNIT', quantity: 42, wastePercent: 5 }],
+    recipeCoveragePercent: 62.5
+  } as never)
+
+  render(<ReportsScreen />)
+
+  expect(await screen.findByText(/consumo de ingredientes/i)).toBeInTheDocument()
+  expect(screen.getByText(/42 unidad/i)).toBeInTheDocument()
+  expect(screen.getByText(/62[,.]5 %/i)).toBeInTheDocument()
+  expect(screen.getByText(/reporte es incompleto/i)).toBeInTheDocument()
+})
+
+it('advierte cobertura cero aunque no haya ingredientes', async () => {
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  vi.mocked(request).mockResolvedValue({
+    expensesPesos: 0,
+    byIngredient: [],
+    recipeCoveragePercent: 0
+  } as never)
+
+  render(<ReportsScreen />)
+
+  expect(await screen.findByText(/cobertura de recetas: 0 %/i)).toBeInTheDocument()
+  expect(screen.getByText(/reporte es incompleto/i)).toBeInTheDocument()
 })
 
 it('muestra todas las ventas locales aunque el servidor aún tenga solo una', async () => {

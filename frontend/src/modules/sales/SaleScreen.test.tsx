@@ -46,6 +46,30 @@ async function seedProduct({ pricePesos }: { pricePesos: number }): Promise<Caja
   return db
 }
 
+async function productWithAddons(): Promise<CajaDb> {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.addons.put({ id: 'a1', name: 'Tocineta', pricePesos: 5000, active: true })
+  await db.products.put({
+    id: 'p1', name: 'SENCILLA', categoryName: 'HAMBURGUESAS', kind: 'PRODUCT',
+    pricePesos: 16500, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], addonIds: ['a1'], components: []
+  })
+  return db
+}
+
+async function productWithDayPrice(): Promise<CajaDb> {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  await db.products.put({
+    id: 'p1', name: 'VOZ Y YO', categoryName: 'COMBOS', kind: 'COMBO',
+    pricePesos: 35000, costPesos: null, sortOrder: 1, active: true,
+    modifierGroupIds: [], addonIds: [], components: [],
+    dayPrices: [{ weekday: bogotaWeekday(new Date()), pricePesos: 30000 }]
+  })
+  return db
+}
+
 it('un doble clic crea una sola venta', async () => {
   const db = openDb(`test-screen-${crypto.randomUUID()}`)
   opened.push(db)
@@ -346,36 +370,66 @@ it('avisa cuando la búsqueda no tiene coincidencias', async () => {
   expect(screen.getByText(/sin productos/i)).toBeInTheDocument()
 })
 
-it('muestra los modificadores elegidos en el carrito', async () => {
-  const db = openDb(`test-screen-${crypto.randomUUID()}`)
-  opened.push(db)
-  await db.modifierGroups.put({
-    id: 'g1',
-    name: 'EXTRAS',
-    minSelection: 0,
-    maxSelection: 1,
-    modifiers: [{ id: 'm1', name: 'Extra queso', additionalPricePesos: 2000 }]
-  })
-  await db.products.put({
-    id: 'p1',
-    name: 'SENCILLA',
-    categoryName: 'HAMBURGUESAS',
-    kind: 'PRODUCT',
-    pricePesos: 16500,
-    costPesos: null,
-    sortOrder: 1,
-    active: true,
-    modifierGroupIds: ['g1'],
-    components: []
-  })
-
+it('permite dos tocinetas y cobra el doble', async () => {
+  const db = await productWithAddons()
   renderScreen({ database: db })
+
   await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
-  await userEvent.click(screen.getByLabelText(/extra queso/i))
+  await userEvent.click(screen.getByLabelText(/tocineta/i))
+  await userEvent.click(screen.getByRole('button', { name: /agregar tocineta/i }))
   await userEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
 
   const cart = screen.getByRole('region', { name: 'Carrito' })
-  expect(within(cart).getByText(/extra queso/i)).toBeInTheDocument()
+  expect(within(cart).getByText(/2 × tocineta/i)).toBeInTheDocument()
+  expect(within(cart).getByText(/total \$26\.500/i)).toBeInTheDocument()
+})
+
+it('usa el precio del día en la tarjeta y en el cobro', async () => {
+  const db = await productWithDayPrice()
+  renderScreen({ database: db })
+
+  const card = await screen.findByRole('button', { name: /voz y yo/i })
+  expect(card).toHaveTextContent('$30.000')
+  await userEvent.click(card)
+  expect(screen.getByText(/total \$30\.000/i)).toBeInTheDocument()
+})
+
+it('muestra el precio del día en el selector de variantes', async () => {
+  const db = openDb(`test-screen-${crypto.randomUUID()}`)
+  opened.push(db)
+  const today = bogotaWeekday(new Date())
+  await db.products.bulkPut([
+    {
+      id: 'p1', name: 'SALCHI TOCI - MAIZ PERSONAL', categoryName: 'SALCHIPAPAS',
+      kind: 'PRODUCT', pricePesos: 18000, costPesos: null, sortOrder: 1, active: true,
+      modifierGroupIds: [], addonIds: [], components: [],
+      dayPrices: [{ weekday: today, pricePesos: 15000 }]
+    },
+    {
+      id: 'p2', name: 'SALCHI TOCI - MAIZ MEDIANA 2P', categoryName: 'SALCHIPAPAS',
+      kind: 'PRODUCT', pricePesos: 24000, costPesos: null, sortOrder: 1, active: true,
+      modifierGroupIds: [], addonIds: [], components: [],
+      dayPrices: [{ weekday: today, pricePesos: 20000 }]
+    }
+  ])
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /salchi toci - maiz/i }))
+
+  expect(screen.getByRole('button', { name: /personal.*\$15\.000/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /personal.*\$18\.000/i })).not.toBeInTheDocument()
+})
+
+it('muestra los adicionales elegidos en el carrito', async () => {
+  const db = await productWithAddons()
+
+  renderScreen({ database: db })
+  await userEvent.click(await screen.findByRole('button', { name: /sencilla/i }))
+  await userEvent.click(screen.getByLabelText(/tocineta/i))
+  await userEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
+
+  const cart = screen.getByRole('region', { name: 'Carrito' })
+  expect(within(cart).getByText(/1 × tocineta/i)).toBeInTheDocument()
 })
 
 it('imprime automáticamente al cobrar y permite reimprimir', async () => {

@@ -260,6 +260,14 @@ public class SyncService {
             uuid(modifier.get("modifierId")), (String) modifier.get("modifierName"),
             ((Number) modifier.get("additionalPricePesos")).longValue()));
       }
+      var addons = new ArrayList<CreateSaleCommand.AddonCommand>();
+      for (Map<String, Object> addon : (List<Map<String, Object>>) item.getOrDefault("addons",
+          List.of())) {
+        addons.add(new CreateSaleCommand.AddonCommand(
+            uuid(addon.get("addonId")), (String) addon.get("addonName"),
+            ((Number) addon.get("additionalPricePesos")).longValue(),
+            addon.get("quantity") == null ? 1 : ((Number) addon.get("quantity")).intValue()));
+      }
       var components = new ArrayList<CreateSaleCommand.ComponentCommand>();
       for (Map<String, Object> component : (List<Map<String, Object>>) item.getOrDefault("components",
           List.of())) {
@@ -273,7 +281,7 @@ public class SyncService {
           (String) item.get("productName"), (String) item.get("categoryName"),
           ((Number) item.get("quantity")).intValue(), unitPrice,
           item.get("costPesos") == null ? null : ((Number) item.get("costPesos")).longValue(),
-          (String) item.get("note"), modifiers, components, catalogPrice,
+          (String) item.get("note"), modifiers, addons, components, catalogPrice,
           (String) item.get("overrideReason")));
     }
     var deliveryFee = ((Number) payload.getOrDefault("deliveryFeePesos", 0)).longValue();
